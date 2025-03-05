@@ -4,8 +4,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'departure.dart';
-import 'Destination.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -16,13 +14,22 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   LocationData? _currentLocation;
-  LatLng? _departureLocation;
-  LatLng? _destinationLocation;
-  String _departureName = "Select Departure";
-  String _destinationName = "Select Destination";
+  LatLng? _selectedStation;
   List<LatLng> _routePoints = [];
   String _estimatedTime = "N/A";
   late MapController _mapController;
+  final List<Map<String, dynamic>> _stations = [
+    {
+      'name': 'Nearby Municipalities Station',
+      'lat': 27.87374386370353,
+      'lon': -0.28424559734165983,
+    },
+    {
+      'name': 'Distant Municipalities Station',
+      'lat': 27.88156764617432,
+      'lon': -0.28019696476583544,
+    },
+  ];
 
   @override
   void initState() {
@@ -33,6 +40,18 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _getUserLocation() async {
     Location location = Location();
+    bool serviceEnabled = await location.serviceEnabled();
+    if (!serviceEnabled) {
+      serviceEnabled = await location.requestService();
+      if (!serviceEnabled) return;
+    }
+
+    PermissionStatus permissionGranted = await location.hasPermission();
+    if (permissionGranted == PermissionStatus.denied) {
+      permissionGranted = await location.requestPermission();
+      if (permissionGranted != PermissionStatus.granted) return;
+    }
+
     LocationData locationData = await location.getLocation();
     setState(() {
       _currentLocation = locationData;
@@ -43,54 +62,32 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  void _updateDeparture(Map<String, dynamic> departure) {
+  void _updateSelectedStation(Map<String, dynamic> station) {
     setState(() {
-      _departureName = departure['name'];
-      _departureLocation = LatLng(departure['lat'], departure['lon']);
+      _selectedStation = LatLng(station['lat'], station['lon']);
       _calculateRoute();
     });
-  }
-
-  void _updateDestination(Map<String, dynamic> destination) {
-    setState(() {
-      _destinationName = destination['name'];
-      _destinationLocation = LatLng(destination['lat'], destination['lon']);
-      _calculateRoute();
-    });
-  }
-
-  void _swapLocations() {
-    setState(() {
-      String tempName = _departureName;
-      _departureName = _destinationName;
-      _destinationName = tempName;
-
-      LatLng? tempLocation = _departureLocation;
-      _departureLocation = _destinationLocation;
-      _destinationLocation = tempLocation;
-    });
-    _calculateRoute();
   }
 
   Future<void> _calculateRoute() async {
-    if (_departureLocation == null || _destinationLocation == null) return;
+    if (_currentLocation == null || _selectedStation == null) return;
 
-    final String apiKey = "0mLFOCbR4d37yR14JI6y1QL3kztkWhKff3tjn95qc8U"; // استبدل بمفتاح HERE API الخاص بك
+    final String apiKey = "0mLFOCbR4d37yR14JI6y1QL3kztkWhKff3tjn95qc8U"; // Replace with your HERE API key
     final Uri url = Uri.parse(
-        "https://router.hereapi.com/v8/routes?apikey=$apiKey&transportMode=bus&origin=${_departureLocation!.latitude},${_departureLocation!.longitude}&destination=${_destinationLocation!.latitude},${_destinationLocation!.longitude}&return=polyline,travelSummary");
+        "https://router.hereapi.com/v8/routes?apikey=$apiKey&transportMode=bus&origin=${_currentLocation!.latitude},${_currentLocation!.longitude}&destination=${_selectedStation!.latitude},${_selectedStation!.longitude}&return=polyline,travelSummary");
 
     final response = await http.get(url);
     if (response.statusCode == 200) {
       final data = json.decode(response.body);
       final route = data['routes'][0];
 
-      // استخراج الوقت المقدر للوصول
+      // Extract estimated travel time
       final int estimatedTimeSeconds = route['sections'][0]['travelSummary']['duration'];
       final Duration duration = Duration(seconds: estimatedTimeSeconds);
       final String estimatedTime =
           "${duration.inMinutes} min${duration.inMinutes > 1 ? 's' : ''}";
 
-      // استخراج النقاط لرسم المسار
+      // Extract polyline points for the route
       final polyline = route['sections'][0]['polyline'];
       final decodedPoints = _decodePolyline(polyline);
 
@@ -124,7 +121,7 @@ class _HomePageState extends State<HomePage> {
             options: MapOptions(
               initialCenter: _currentLocation != null
                   ? LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)
-                  : LatLng(37.427961, -122.085749),
+                  : LatLng(27.87374386370353, -0.28424559734165983),
               initialZoom: 14.0,
             ),
             children: [
@@ -138,7 +135,20 @@ class _HomePageState extends State<HomePage> {
                     Polyline(
                       points: _routePoints,
                       strokeWidth: 5.0,
-                      color: Colors.red, // لون المسار
+                      color: Colors.red, // Route color
+                    ),
+                  ],
+                ),
+              // Add CircleLayer for user's current location
+              if (_currentLocation != null)
+                CircleLayer(
+                  circles: [
+                    CircleMarker(
+                      point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
+                      color: Colors.blue.withOpacity(0.3), // Circle color with transparency
+                      borderColor: Colors.blue, // Border color
+                      borderStrokeWidth: 2.0, // Border width
+                      radius: 10.0, // Reduced radius to make the circle smaller
                     ),
                   ],
                 ),
@@ -151,19 +161,12 @@ class _HomePageState extends State<HomePage> {
                       height: 40,
                       child: const Icon(Icons.my_location, color: Colors.green, size: 30),
                     ),
-                  if (_departureLocation != null)
+                  if (_selectedStation != null)
                     Marker(
-                      point: _departureLocation!,
+                      point: _selectedStation!,
                       width: 40,
                       height: 40,
                       child: const Icon(Icons.directions_bus, color: Colors.blue, size: 30),
-                    ),
-                  if (_destinationLocation != null)
-                    Marker(
-                      point: _destinationLocation!,
-                      width: 40,
-                      height: 40,
-                      child: const Icon(Icons.location_on, color: Colors.red, size: 30),
                     ),
                 ],
               ),
@@ -185,79 +188,44 @@ class _HomePageState extends State<HomePage> {
             child: Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.white, // البطاقة البيضاء
-                borderRadius: BorderRadius.circular(16), // زوايا دائرية
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black26,
-                    blurRadius: 10,
-                    spreadRadius: 2, // تأثير الظل
-                  ),
-                ],
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
+                mainAxisSize: MainAxisSize.min, // To make the container take only the required space
                 children: [
-                  // عرض الوقت المقدر للوصول
-                  Text(
-                    "Estimated Time: $_estimatedTime",
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                  const Text(
+                    "Select a Station",
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
-
-                  // حقلا Departure و Destination مع زر التبديل بينهما
-                  Row(
-                    children: [
-                      // حقل Departure
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () async {
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const DeparturePage()),
-                            );
-                            if (result != null) _updateDeparture(result);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(8)),
-                            child: Text(_departureName),
-                          ),
-                        ),
-                      ),
-
-                      // زر التبديل (↕️)
-                      IconButton(
-                        onPressed: _swapLocations,
-                        icon: const Icon(Icons.swap_vert, size: 30),
-                        color: Colors.blue,
-                      ),
-
-                      // حقل Destination
-                      Expanded(
-                        child: GestureDetector(
-                          onTap: () async {
-                            final result = await Navigator.push(
-                              context,
-                              MaterialPageRoute(builder: (context) => const DestinationPage()), // تأكد من وجود الصفحة
-                            );
-                            if (result != null) _updateDestination(result);
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(color: Colors.grey[200], borderRadius: BorderRadius.circular(8)),
-                            child: Text(_destinationName), // عرض الوجهة المختارة
-                          ),
-                        ),
-                      ),
-                    ],
+                  // Nearby Municipalities Station Button
+                  ElevatedButton(
+                    onPressed: () {
+                      _updateSelectedStation(_stations[0]);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFCAD7FF), // Button color
+                      minimumSize: const Size(double.infinity, 50), // Full width and fixed height
+                    ),
+                    child: Text(_stations[0]['name']),
+                  ),
+                  const SizedBox(height: 10), // Space between buttons
+                  // Distant Municipalities Station Button
+                  ElevatedButton(
+                    onPressed: () {
+                      _updateSelectedStation(_stations[1]);
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFCAD7FF), // Button color
+                      minimumSize: const Size(double.infinity, 50), // Full width and fixed height
+                    ),
+                    child: Text(_stations[1]['name']),
                   ),
                 ],
               ),
             ),
           ),
-
-
         ],
       ),
     );

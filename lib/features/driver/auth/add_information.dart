@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'basic_info.dart'; // استيراد صفحة BasicInfoPage
 
 class AddInformationPage extends StatelessWidget {
   const AddInformationPage({super.key});
@@ -41,7 +42,13 @@ class AddInformationPage extends StatelessWidget {
                 icon: Icons.person, // أيقونة Basic info
                 label: 'Basic info',
                 onPressed: () {
-                  // الانتقال إلى صفحة Basic info
+                  // الانتقال إلى صفحة BasicInfoPage
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const BasicInfoPage(),
+                    ),
+                  );
                 },
               ),
 
