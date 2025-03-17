@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'add_information.dart'; // استيراد صفحة add_information.dart
 
 class BasicInfoPage extends StatefulWidget {
+  const BasicInfoPage({Key? key}) : super(key: key);
+
   @override
   _BasicInfoPageState createState() => _BasicInfoPageState();
 }
@@ -12,26 +15,65 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
   final _dateOfBirthController = TextEditingController();
   final _emailController = TextEditingController();
 
+  void _validateAndNavigate(BuildContext context) {
+    if (_formKey.currentState!.validate()) {
+      // التحقق من صحة البيانات
+      if (_firstNameController.text.isEmpty ||
+          _lastNameController.text.isEmpty ||
+          _dateOfBirthController.text.isEmpty ||
+          _emailController.text.isEmpty) {
+        // عرض رسالة خطأ إذا كانت البيانات غير صحيحة
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please fill all fields correctly.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+          .hasMatch(_emailController.text)) {
+        // التحقق من صحة البريد الإلكتروني
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter a valid email address.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      } else {
+        // الانتقال إلى صفحة add_information.dart إذا كانت البيانات صحيحة
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => AddInformationPage(),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Basic Information'),
+        backgroundColor: const Color(0xFF14212F),
+      ),
       body: Container(
-        width: 412,
-        height: 917,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment(1.00, -0.02),
-            end: Alignment(0.00, 1.00),
-            colors: [Color(0xFF9CB3FA), Color(0xFF2A52CA), Color(0xFF14212F)],
+            begin: Alignment(-0.20, -0.98),
+            end: Alignment(0.2, 0.98),
+            colors: [Color(0xFF9CB3F9), Color(0xFF2A52C9), Color(0xFF14202E)],
           ),
         ),
-        child: Stack(
-          children: [
-            Positioned(
-              left: 125,
-              top: 95,
-              child: Container(
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const SizedBox(height: 20),
+              // إضافة الصورة في الأعلى
+              Container(
                 width: 160,
                 height: 160,
                 decoration: BoxDecoration(
@@ -41,216 +83,107 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                   ),
                 ),
               ),
-            ),
-            Positioned(
-              left: 23,
-              top: 292,
-              child: Text(
-                'First Name',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 24,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 22,
-              top: 406,
-              child: Text(
-                'Last Name',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 24,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 24,
-              top: 520,
-              child: Text(
-                'Date of birth',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 24,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 24,
-              top: 634,
-              child: Text(
-                'Email adresse',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.black,
-                  fontSize: 24,
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ),
-            Positioned(
-              left: 33,
-              top: 337,
-              child: Container(
-                width: 359,
-                height: 54,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: ShapeDecoration(
-                  color: Color(0xFFEAEEFA),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(width: 1, color: Color(0xFF666666)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: TextFormField(
-                  controller: _firstNameController,
-                  decoration: InputDecoration(
-                    hintText: 'First Name',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.only(left: 11, top: 17),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 33,
-              top: 451,
-              child: Container(
-                width: 359,
-                height: 54,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: ShapeDecoration(
-                  color: Color(0xFFEAEEFA),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(width: 1, color: Color(0xFF666666)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: TextFormField(
-                  controller: _lastNameController,
-                  decoration: InputDecoration(
-                    hintText: 'Last Name',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.only(left: 11, top: 17),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 33,
-              top: 563,
-              child: Container(
-                width: 359,
-                height: 54,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: ShapeDecoration(
-                  color: Color(0xFFEAEEFA),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(width: 1, color: Color(0xFF666666)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: TextFormField(
-                  controller: _dateOfBirthController,
-                  decoration: InputDecoration(
-                    hintText: 'Date of birth',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.only(left: 11, top: 17),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 33,
-              top: 683,
-              child: Container(
-                width: 359,
-                height: 54,
-                padding: const EdgeInsets.symmetric(horizontal: 6),
-                decoration: ShapeDecoration(
-                  color: Color(0xFFEAEEFA),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(width: 1, color: Color(0xFF666666)),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: TextFormField(
-                  controller: _emailController,
-                  decoration: InputDecoration(
-                    hintText: 'Email adresse',
-                    border: InputBorder.none,
-                    contentPadding: EdgeInsets.only(left: 11, top: 17),
-                  ),
-                ),
-              ),
-            ),
-            Positioned(
-              left: 84,
-              top: 780,
-              child: GestureDetector(
-                onTap: () {
-                  if (_formKey.currentState!.validate()) {
-                    // Navigate to the next page
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => AddInformationPage(),
-                      ),
-                    );
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: _firstNameController,
+                label: 'First Name',
+                icon: Icons.person,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your first name';
                   }
+                  return null;
                 },
-                child: Container(
-                  width: 254,
-                  height: 46,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: ShapeDecoration(
-                    color: Color(0xFF547CF5),
-                    shape: RoundedRectangleBorder(
-                      side: BorderSide(
-                        width: 1,
-                        color: Colors.white.withOpacity(0.5),
-                      ),
-                      borderRadius: BorderRadius.circular(30),
-                    ),
-                  ),
-                  child: Center(
-                    child: Text(
-                      'Done',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 26,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+              ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: _lastNameController,
+                label: 'Last Name',
+                icon: Icons.person,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your last name';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: _dateOfBirthController,
+                label: 'Date of Birth',
+                icon: Icons.calendar_today,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your date of birth';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 20),
+              _buildTextField(
+                controller: _emailController,
+                label: 'Email Address',
+                icon: Icons.email,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter your email address';
+                  }
+                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                    return 'Please enter a valid email address';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 40),
+              ElevatedButton(
+                onPressed: () => _validateAndNavigate(context),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                  backgroundColor: Colors.white.withOpacity(0.1),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
                   ),
                 ),
+                child: const Text(
+                  'Done',
+                  style: TextStyle(color: Colors.white, fontSize: 16),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 20),
+            ],
+          ),
         ),
       ),
     );
   }
-}
 
-class AddInformationPage extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Text('Add Information Page'),
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required String? Function(String?)? validator,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 40),
+      child: TextFormField(
+        controller: controller,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF2A52CA)),
+          ),
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.1),
+        ),
+        validator: validator,
       ),
     );
   }

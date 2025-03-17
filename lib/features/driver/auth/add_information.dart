@@ -115,7 +115,7 @@ class _AddInformationPageState extends State<AddInformationPage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const BasicInfoPage(),
+                      builder: (context) => BasicInfoPage(), // Removed const
                     ),
                   );
                 },
