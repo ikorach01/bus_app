@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:bus_app/features/user/user_home/home_page.dart'; // تأكد من استيراد HomePage بشكل صحيح
 
 class AskLocationScreen extends StatefulWidget {
   const AskLocationScreen({super.key});
@@ -33,7 +34,7 @@ class _AskLocationScreenState extends State<AskLocationScreen> {
                     Navigator.of(context).pop();
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => const Scaffold(body: Center(child: Text('Home Page')))),
+                      MaterialPageRoute(builder: (context) => const HomePage()), // الانتقال إلى HomePage
                     );
                   },
                 ),
@@ -67,7 +68,7 @@ class _AskLocationScreenState extends State<AskLocationScreen> {
                     Navigator.of(context).pop();
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => const Scaffold(body: Center(child: Text('Home Page')))),
+                      MaterialPageRoute(builder: (context) => const HomePage()), // الانتقال إلى HomePage
                     );
                   },
                 ),
@@ -87,7 +88,7 @@ class _AskLocationScreenState extends State<AskLocationScreen> {
         // Navigate to home page when permission is granted
         Navigator.pushReplacement(
           context,
-          MaterialPageRoute(builder: (context) => const Scaffold(body: Center(child: Text('Home Page')))),
+          MaterialPageRoute(builder: (context) => const HomePage()), // الانتقال إلى HomePage
         );
       }
     } catch (e) {
@@ -106,7 +107,7 @@ class _AskLocationScreenState extends State<AskLocationScreen> {
                   Navigator.of(context).pop();
                   Navigator.pushReplacement(
                     context,
-                    MaterialPageRoute(builder: (context) => const Scaffold(body: Center(child: Text('Home Page')))),
+                    MaterialPageRoute(builder: (context) => const HomePage()), // الانتقال إلى HomePage
                   );
                 },
               ),
@@ -209,7 +210,7 @@ class _AskLocationScreenState extends State<AskLocationScreen> {
                   onPressed: () {
                     Navigator.pushReplacement(
                       context,
-                      MaterialPageRoute(builder: (context) => const Scaffold(body: Center(child: Text('Home Page')))),
+                      MaterialPageRoute(builder: (context) => const HomePage()), // الانتقال إلى HomePage
                     );
                   },
                   child: Text(
