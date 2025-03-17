@@ -56,6 +56,7 @@ class _HomePageState extends State<HomePage> {
   ];
 
   Map<String, dynamic>? _selectedBus; // الحافلة المختارة
+  String? _selectedStationName; // اسم المحطة المختارة
 
   @override
   void initState() {
@@ -105,6 +106,7 @@ class _HomePageState extends State<HomePage> {
   void _updateSelectedStation(Map<String, dynamic> station) {
     setState(() {
       _selectedStation = LatLng(station['lat'], station['lon']);
+      _selectedStationName = station['name']; // تحديث اسم المحطة المختارة
       _calculateRoute();
     });
   }
@@ -196,6 +198,11 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // تصفية الحافلات بناءً على المحطة المختارة
+    final filteredBuses = _mockBuses.where((bus) {
+      return bus['destination'] == _selectedStationName || bus['finalDestination'] == _selectedStationName;
+    }).toList();
+
     return Scaffold(
       body: Stack(
         children: [
@@ -250,8 +257,8 @@ class _HomePageState extends State<HomePage> {
                       height: 40,
                       child: const Icon(Icons.directions_bus, color: Colors.blue, size: 30),
                     ),
-                  // عرض الحافلات على الخريطة
-                  for (final bus in _mockBuses)
+                  // عرض الحافلات المصفاة على الخريطة
+                  for (final bus in filteredBuses)
                     Marker(
                       point: bus['position'],
                       width: 40,
