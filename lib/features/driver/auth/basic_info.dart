@@ -1,78 +1,33 @@
 import 'package:flutter/material.dart';
 
-class BasicInfoPage extends StatelessWidget {
-  const BasicInfoPage({super.key});
+class BasicInfoPage extends StatefulWidget {
+  @override
+  _BasicInfoPageState createState() => _BasicInfoPageState();
+}
+
+class _BasicInfoPageState extends State<BasicInfoPage> {
+  final _formKey = GlobalKey<FormState>();
+  final _firstNameController = TextEditingController();
+  final _lastNameController = TextEditingController();
+  final _dateOfBirthController = TextEditingController();
+  final _emailController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        width: double.infinity,
-        height: double.infinity,
-        decoration: const BoxDecoration(color: Color(0xFFF4F4F4)),
+        width: 412,
+        height: 917,
+        clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment(1.00, -0.02),
+            end: Alignment(0.00, 1.00),
+            colors: [Color(0xFF9CB3FA), Color(0xFF2A52CA), Color(0xFF14212F)],
+          ),
+        ),
         child: Stack(
           children: [
-            // الأشكال البيضاوية في الخلفية
-            Positioned(
-              left: 198,
-              top: -83,
-              child: Container(
-                width: 367,
-                height: 332,
-                decoration: const ShapeDecoration(
-                  color: Color(0xFF002BAA),
-                  shape: OvalBorder(),
-                ),
-              ),
-            ),
-            Positioned(
-              left: -8,
-              top: 371,
-              child: Container(
-                width: 243,
-                height: 169,
-                decoration: const ShapeDecoration(
-                  color: Color(0xFFD78885),
-                  shape: OvalBorder(),
-                ),
-              ),
-            ),
-            Positioned(
-              left: -139,
-              top: 640,
-              child: Container(
-                width: 343,
-                height: 257,
-                decoration: ShapeDecoration(
-                  color: const Color(0xFF6C8EF3),
-                  shape: OvalBorder(side: BorderSide(width: 1)),
-                ),
-              ),
-            ),
-
-            // زر الرجوع في الزاوية العلوية اليسرى
-            Positioned(
-              left: 16,
-              top: 71,
-              child: GestureDetector(
-                onTap: () {
-                  // الرجوع إلى الصفحة السابقة
-                  Navigator.pop(context);
-                },
-                child: Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(),
-                  child: const Icon(
-                    Icons.chevron_left, // أيقونة الرجوع
-                    size: 48,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-            ),
-
-            // صورة المستخدم
             Positioned(
               left: 125,
               top: 95,
@@ -80,128 +35,203 @@ class BasicInfoPage extends StatelessWidget {
                 width: 160,
                 height: 160,
                 decoration: BoxDecoration(
-                  image: const DecorationImage(
-                    image: NetworkImage(
-                        "https://placehold.co/160x160"), // صورة المستخدم
-                    fit: BoxFit.fill,
+                  image: DecorationImage(
+                    image: AssetImage("assets/images/driver3.png"),
+                    fit: BoxFit.cover,
                   ),
-                  borderRadius: BorderRadius.circular(80), // جعل الصورة دائرية
                 ),
               ),
             ),
-
-            // حقول الإدخال
             Positioned(
-              left: 33,
+              left: 23,
               top: 292,
-              child: _buildInputField(label: 'First Name'),
+              child: Text(
+                'First Name',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 24,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
             Positioned(
-              left: 33,
+              left: 22,
               top: 406,
-              child: _buildInputField(label: 'Last Name'),
+              child: Text(
+                'Last Name',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 24,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
             Positioned(
-              left: 33,
+              left: 24,
               top: 520,
-              child: _buildInputField(label: 'Date of birth'),
+              child: Text(
+                'Date of birth',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 24,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+            Positioned(
+              left: 24,
+              top: 634,
+              child: Text(
+                'Email adresse',
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  color: Colors.black,
+                  fontSize: 24,
+                  fontFamily: 'Inter',
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
             ),
             Positioned(
               left: 33,
-              top: 634,
-              child: _buildInputField(label: 'Email adresse'),
+              top: 337,
+              child: Container(
+                width: 359,
+                height: 54,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: ShapeDecoration(
+                  color: Color(0xFFEAEEFA),
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(width: 1, color: Color(0xFF666666)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: TextFormField(
+                  controller: _firstNameController,
+                  decoration: InputDecoration(
+                    hintText: 'First Name',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.only(left: 11, top: 17),
+                  ),
+                ),
+              ),
             ),
-
-            // زر Done
+            Positioned(
+              left: 33,
+              top: 451,
+              child: Container(
+                width: 359,
+                height: 54,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: ShapeDecoration(
+                  color: Color(0xFFEAEEFA),
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(width: 1, color: Color(0xFF666666)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: TextFormField(
+                  controller: _lastNameController,
+                  decoration: InputDecoration(
+                    hintText: 'Last Name',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.only(left: 11, top: 17),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 33,
+              top: 563,
+              child: Container(
+                width: 359,
+                height: 54,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: ShapeDecoration(
+                  color: Color(0xFFEAEEFA),
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(width: 1, color: Color(0xFF666666)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: TextFormField(
+                  controller: _dateOfBirthController,
+                  decoration: InputDecoration(
+                    hintText: 'Date of birth',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.only(left: 11, top: 17),
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: 33,
+              top: 683,
+              child: Container(
+                width: 359,
+                height: 54,
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                decoration: ShapeDecoration(
+                  color: Color(0xFFEAEEFA),
+                  shape: RoundedRectangleBorder(
+                    side: BorderSide(width: 1, color: Color(0xFF666666)),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: TextFormField(
+                  controller: _emailController,
+                  decoration: InputDecoration(
+                    hintText: 'Email adresse',
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.only(left: 11, top: 17),
+                  ),
+                ),
+              ),
+            ),
             Positioned(
               left: 84,
               top: 780,
-              child: ElevatedButton(
-                onPressed: () {
-                  // إضافة منطق عند النقر على زر Done
+              child: GestureDetector(
+                onTap: () {
+                  if (_formKey.currentState!.validate()) {
+                    // Navigate to the next page
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => AddInformationPage(),
+                      ),
+                    );
+                  }
                 },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF547CF5), // لون الزر
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    side: BorderSide(
-                      width: 1,
-                      color: Colors.white.withOpacity(0.5),
+                child: Container(
+                  width: 254,
+                  height: 46,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: ShapeDecoration(
+                    color: Color(0xFF547CF5),
+                    shape: RoundedRectangleBorder(
+                      side: BorderSide(
+                        width: 1,
+                        color: Colors.white.withOpacity(0.5),
+                      ),
+                      borderRadius: BorderRadius.circular(30),
                     ),
                   ),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 50, vertical: 10),
-                ),
-                child: const Text(
-                  'Done',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-
-            // شريط الحالة (Status Bar)
-            Positioned(
-              left: 0,
-              top: 0,
-              child: Container(
-                width: 412,
-                height: 47,
-                padding: const EdgeInsets.only(top: 21),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 16),
-                      child: Text(
-                        '9:41',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 17,
-                          fontFamily: 'SF Pro',
-                          fontWeight: FontWeight.w500,
-                          height: 1.29,
-                        ),
-                      ),
-                    ),
-                    Container(
-                      width: 124,
-                      height: 10,
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.only(right: 16),
-                      child: Icon(
-                        Icons.signal_cellular_alt, // أيقونة الإشارة
-                        size: 20,
-                        color: Colors.black,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-
-            // شريط التمرير (Navigation Bar)
-            Positioned(
-              left: 0,
-              top: 884,
-              child: Container(
-                width: 412,
-                height: 34,
-                padding: const EdgeInsets.only(
-                    top: 21, left: 10, right: 10, bottom: 8),
-                child: Center(
-                  child: Container(
-                    width: 138,
-                    height: 5,
-                    decoration: ShapeDecoration(
-                      color: Colors.black,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(100),
+                  child: Center(
+                    child: Text(
+                      'Done',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 26,
+                        fontFamily: 'Inter',
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
@@ -213,31 +243,14 @@ class BasicInfoPage extends StatelessWidget {
       ),
     );
   }
+}
 
-  // دالة مساعدة لبناء حقول الإدخال
-  Widget _buildInputField({required String label}) {
-    return Container(
-      width: 359,
-      height: 54,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: ShapeDecoration(
-        color: const Color(0xFFEAEEFA),
-        shape: RoundedRectangleBorder(
-          side: const BorderSide(width: 1, color: Color(0xFF666666)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-      child: TextField(
-        decoration: InputDecoration(
-          hintText: label,
-          hintStyle: const TextStyle(
-            color: Color(0xFF666666),
-            fontSize: 14,
-            fontFamily: 'Inter',
-            fontWeight: FontWeight.w500,
-          ),
-          border: InputBorder.none,
-        ),
+class AddInformationPage extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Center(
+        child: Text('Add Information Page'),
       ),
     );
   }

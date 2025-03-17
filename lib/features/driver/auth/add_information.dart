@@ -1,12 +1,85 @@
 import 'package:flutter/material.dart';
-import 'basic_info.dart'; // استيراد صفحة BasicInfoPage
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'basic_info.dart';
+import 'driver_licence.dart';
+import 'vehicle_info.dart';
+import '../driver_home/quick_icons.dart'; // Updated import path
 
-class AddInformationPage extends StatelessWidget {
-  const AddInformationPage({super.key});
+final supabase = Supabase.instance.client;
+
+class AddInformationPage extends StatefulWidget {
+  const AddInformationPage({Key? key}) : super(key: key);
+
+  @override
+  _AddInformationPageState createState() => _AddInformationPageState();
+}
+
+class _AddInformationPageState extends State<AddInformationPage> {
+  final TextEditingController fullNameController = TextEditingController();
+  final TextEditingController licenseNumberController = TextEditingController();
+  final TextEditingController vehicleModelController = TextEditingController();
+  final TextEditingController vehiclePlateController = TextEditingController();
+
+  bool isLoading = false;
+
+  Future<void> _submitInformation() async {
+    setState(() => isLoading = true);
+
+    try {
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        throw Exception('User not logged in.');
+      }
+
+      // Insert data into the `drivers` table
+      final response = await supabase.from('drivers').insert({
+        'user_id': user.id,
+        'full_name': fullNameController.text.trim(),
+        'license_number': licenseNumberController.text.trim(),
+        'vehicle_model': vehicleModelController.text.trim(),
+        'vehicle_plate': vehiclePlateController.text.trim(),
+      });
+
+      if (response.error != null) {
+        throw Exception(response.error!.message);
+      }
+
+      // Show success message
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Information submitted successfully!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+
+      // Navigate to the QuickIconsInterface
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (context) => QuickIconsInterface(),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString()),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+
+    setState(() => isLoading = false);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Register as a Driver'),
+        backgroundColor: const Color(0xFF14212F),
+      ),
       body: Container(
         width: double.infinity,
         height: double.infinity,
@@ -17,12 +90,12 @@ class AddInformationPage extends StatelessWidget {
             colors: [Color(0xFF9CB3F9), Color(0xFF2A52C9), Color(0xFF14202E)],
           ),
         ),
-        child: SafeArea(
+        child: Center(
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              // العنوان الرئيسي
               const Padding(
-                padding: EdgeInsets.only(top: 96),
+                padding: EdgeInsets.only(top: 40),
                 child: Text(
                   'Register as a driver',
                   textAlign: TextAlign.center,
@@ -34,15 +107,11 @@ class AddInformationPage extends StatelessWidget {
                   ),
                 ),
               ),
-
-              const SizedBox(height: 40), // مسافة بين العنوان والعناصر
-
-              // زر Basic info
+              const SizedBox(height: 40),
               _buildInfoButton(
-                icon: Icons.person, // أيقونة Basic info
+                icon: Icons.person,
                 label: 'Basic info',
                 onPressed: () {
-                  // الانتقال إلى صفحة BasicInfoPage
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -51,57 +120,57 @@ class AddInformationPage extends StatelessWidget {
                   );
                 },
               ),
-
-              const SizedBox(height: 20), // مسافة بين العناصر
-
-              // زر Driver licence
+              const SizedBox(height: 20),
               _buildInfoButton(
-                icon: Icons.drive_eta, // أيقونة Driver licence
+                icon: Icons.drive_eta,
                 label: 'Driver licence',
                 onPressed: () {
-                  // الانتقال إلى صفحة Driver licence
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const DriverLicensePage(),
+                    ),
+                  );
                 },
               ),
-
-              const SizedBox(height: 20), // مسافة بين العناصر
-
-              // زر Vehicle info
+              const SizedBox(height: 20),
               _buildInfoButton(
-                icon: Icons.directions_car, // أيقونة Vehicle info
+                icon: Icons.directions_car,
                 label: 'Vehicle info',
                 onPressed: () {
-                  // الانتقال إلى صفحة Vehicle info
+                  // Navigate to VehicleInfoPage
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const VehicleInfoPage(),
+                    ),
+                  );
                 },
               ),
-
-              const SizedBox(height: 40), // مسافة بين العناصر وزر Done
-
-              // زر Done
+              const SizedBox(height: 40),
               ElevatedButton(
                 onPressed: () {
-                  // إضافة منطق عند النقر على زر Done
+                  // Navigate directly to QuickIconsInterface
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const QuickIconsInterface(),
+                    ),
+                  );
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF547CF5), // لون الزر
+                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                  backgroundColor: Colors.white.withOpacity(0.1),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(30),
-                    side: BorderSide(
-                      width: 1,
-                      color: Colors.white.withOpacity(0.5),
-                    ),
+                    borderRadius: BorderRadius.circular(10),
                   ),
-                  padding: const EdgeInsets.symmetric(horizontal: 50, vertical: 10),
                 ),
                 child: const Text(
                   'Done',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 26,
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w700,
-                  ),
+                  style: TextStyle(color: Colors.white, fontSize: 16),
                 ),
               ),
+              const SizedBox(height: 20),
             ],
           ),
         ),
@@ -109,7 +178,6 @@ class AddInformationPage extends StatelessWidget {
     );
   }
 
-  // دالة مساعدة لبناء زر المعلومات
   Widget _buildInfoButton({
     required IconData icon,
     required String label,
@@ -134,9 +202,9 @@ class AddInformationPage extends StatelessWidget {
         ),
         child: Row(
           children: [
-            const SizedBox(width: 16), // مسافة من الحافة اليسرى
-            Icon(icon, size: 32, color: Colors.black), // أيقونة
-            const SizedBox(width: 16), // مسافة بين الأيقونة والنص
+            const SizedBox(width: 16),
+            Icon(icon, size: 32, color: Colors.black),
+            const SizedBox(width: 16),
             Text(
               label,
               style: const TextStyle(
@@ -147,6 +215,31 @@ class AddInformationPage extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: TextField(
+        controller: controller,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
+          enabledBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
+          ),
+          focusedBorder: OutlineInputBorder(
+            borderRadius: BorderRadius.circular(10),
+            borderSide: const BorderSide(color: Color(0xFF2A52CA)),
+          ),
+          filled: true,
+          fillColor: Colors.white.withOpacity(0.1),
         ),
       ),
     );
