@@ -77,8 +77,9 @@ class _AddInformationPageState extends State<AddInformationPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Register as a Driver'),
-        backgroundColor: const Color(0xFF14212F),
+        title: const Text('Register as a Driver', style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF9CB3F9),
+        elevation: 0,
       ),
       body: Container(
         width: double.infinity,
@@ -90,40 +91,60 @@ class _AddInformationPageState extends State<AddInformationPage> {
             colors: [Color(0xFF9CB3F9), Color(0xFF2A52C9), Color(0xFF14202E)],
           ),
         ),
-        child: Center(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Padding(
-                padding: EdgeInsets.only(top: 40),
-                child: Text(
-                  'Register as a driver',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 35,
-                    fontFamily: 'Lalezar',
-                    fontWeight: FontWeight.w400,
+              const SizedBox(height: 32),
+              Center(
+                child: Container(
+                  width: 160,
+                  height: 160,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    image: const DecorationImage(
+                      image: AssetImage("assets/images/busd.png"),
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 32),
+              Text(
+                'Complete Your Profile',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please fill in all required information',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 32),
               _buildInfoButton(
-                icon: Icons.person,
-                label: 'Basic info',
+                icon: Icons.person_outline_rounded,
+                label: 'Basic Information',
+                description: 'Name, phone, and contact details',
                 onPressed: () {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => BasicInfoPage(), // Removed const
+                      builder: (context) => BasicInfoPage(),
                     ),
                   );
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               _buildInfoButton(
-                icon: Icons.drive_eta,
-                label: 'Driver licence',
+                icon: Icons.badge_outlined,
+                label: 'Driver License',
+                description: 'License details and verification',
                 onPressed: () {
                   Navigator.push(
                     context,
@@ -133,12 +154,12 @@ class _AddInformationPageState extends State<AddInformationPage> {
                   );
                 },
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 16),
               _buildInfoButton(
-                icon: Icons.directions_car,
-                label: 'Vehicle info',
+                icon: Icons.directions_car_outlined,
+                label: 'Vehicle Information',
+                description: 'Car details and documentation',
                 onPressed: () {
-                  // Navigate to VehicleInfoPage
                   Navigator.push(
                     context,
                     MaterialPageRoute(
@@ -148,29 +169,36 @@ class _AddInformationPageState extends State<AddInformationPage> {
                 },
               ),
               const SizedBox(height: 40),
-              ElevatedButton(
-                onPressed: () {
-                  // Navigate directly to QuickIconsInterface
-                  Navigator.pushReplacement(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const QuickIconsInterface(),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pushReplacement(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const QuickIconsInterface(),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2A52C9),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                  backgroundColor: Colors.white.withOpacity(0.1),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                    elevation: 2,
+                  ),
+                  child: const Text(
+                    'Complete Registration',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
-                child: const Text(
-                  'Done',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 32),
             ],
           ),
         ),
@@ -181,65 +209,67 @@ class _AddInformationPageState extends State<AddInformationPage> {
   Widget _buildInfoButton({
     required IconData icon,
     required String label,
+    required String description,
     required VoidCallback onPressed,
   }) {
     return GestureDetector(
       onTap: onPressed,
       child: Container(
-        width: 368,
-        height: 68,
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFFAAB6E4),
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: const [
-            BoxShadow(
-              color: Color(0x3F000000),
-              blurRadius: 4,
-              offset: Offset(0, 4),
-              spreadRadius: 0,
-            ),
-          ],
+          color: Colors.white.withOpacity(0.1),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: Colors.white.withOpacity(0.2),
+            width: 1,
+          ),
         ),
         child: Row(
           children: [
-            const SizedBox(width: 16),
-            Icon(icon, size: 32, color: Colors.black),
-            const SizedBox(width: 16),
-            Text(
-              label,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 24,
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w700,
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: const Color(0xFF2A52C9),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                color: Colors.white,
+                size: 24,
               ),
             ),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 18,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.6),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios_rounded,
+              color: Colors.white.withOpacity(0.6),
+              size: 20,
+            ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildTextField(TextEditingController controller, String label, IconData icon) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 16),
-      child: TextField(
-        controller: controller,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF2A52CA)),
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
         ),
       ),
     );

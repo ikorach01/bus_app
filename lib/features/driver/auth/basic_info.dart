@@ -54,8 +54,9 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Basic Information'),
+        title: const Text('Basic Information', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF9CB3F9),
+        elevation: 0,
       ),
       body: Container(
         width: double.infinity,
@@ -68,28 +69,54 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
           ),
         ),
         child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
           child: Form(
-            key: _formKey, // ربط Form بـ _formKey
+            key: _formKey,
             child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const SizedBox(height: 20),
-                // إضافة الصورة في الأعلى
-                Container(
-                  width: 160,
-                  height: 160,
-                  decoration: BoxDecoration(
-                    image: DecorationImage(
-                      image: AssetImage("assets/images/driver3.png"),
-                      fit: BoxFit.cover,
+                const SizedBox(height: 32),
+                Center(
+                  child: Container(
+                    width: 160,
+                    height: 160,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      image: const DecorationImage(
+                        image: AssetImage("assets/images/driver3.png"),
+                        fit: BoxFit.cover,
+                      ),
                     ),
                   ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 32),
+                Center(
+                  child: Column(
+                    children: [
+                      Text(
+                        'Personal Details',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.9),
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Please provide your personal information',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 32),
                 _buildTextField(
                   controller: _firstNameController,
                   label: 'First Name',
-                  icon: Icons.person,
+                  icon: Icons.person_outline_rounded,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your first name';
@@ -97,11 +124,11 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _buildTextField(
                   controller: _lastNameController,
                   label: 'Last Name',
-                  icon: Icons.person,
+                  icon: Icons.person_outline_rounded,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your last name';
@@ -109,11 +136,11 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _buildTextField(
                   controller: _dateOfBirthController,
                   label: 'Date of Birth',
-                  icon: Icons.calendar_today,
+                  icon: Icons.calendar_today_outlined,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your date of birth';
@@ -121,11 +148,11 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                     return null;
                   },
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 16),
                 _buildTextField(
                   controller: _emailController,
                   label: 'Email Address',
-                  icon: Icons.email,
+                  icon: Icons.email_outlined,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email address';
@@ -137,21 +164,29 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                   },
                 ),
                 const SizedBox(height: 40),
-                ElevatedButton(
-                  onPressed: () => _validateAndNavigate(context),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                    backgroundColor: Colors.white.withOpacity(0.1),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
+                SizedBox(
+                  width: double.infinity,
+                  height: 56,
+                  child: ElevatedButton(
+                    onPressed: () => _validateAndNavigate(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF2A52C9),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      elevation: 2,
+                    ),
+                    child: const Text(
+                      'Save & Continue',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
-                  child: const Text(
-                    'Done',
-                    style: TextStyle(color: Colors.white, fontSize: 16),
-                  ),
                 ),
-                const SizedBox(height: 20),
+                const SizedBox(height: 32),
               ],
             ),
           ),
@@ -166,28 +201,34 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
     required IconData icon,
     required String? Function(String?)? validator,
   }) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 40),
-      child: TextFormField(
-        controller: controller,
-        style: const TextStyle(color: Colors.white),
-        decoration: InputDecoration(
-          labelText: label,
-          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
-          enabledBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: BorderSide(color: Colors.white.withOpacity(0.3)),
-          ),
-          focusedBorder: OutlineInputBorder(
-            borderRadius: BorderRadius.circular(10),
-            borderSide: const BorderSide(color: Color(0xFF2A52CA)),
-          ),
-          filled: true,
-          fillColor: Colors.white.withOpacity(0.1),
+    return TextFormField(
+      controller: controller,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+        prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
         ),
-        validator: validator,
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF2A52C9), width: 2),
+        ),
+        errorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.red.withOpacity(0.5)),
+        ),
+        focusedErrorBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Colors.red),
+        ),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       ),
+      validator: validator,
     );
   }
 }

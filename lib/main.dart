@@ -1,9 +1,10 @@
  import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'package:bus_app/features/shared/welcome_page.dart';
 import 'package:bus_app/features/user/user_home/home_page.dart';
 import 'package:bus_app/features/user/ask_location.dart';
+import 'package:bus_app/features/shared/role_selection.dart';
+import 'package:bus_app/features/driver/auth/add_information.dart';
 import 'package:app_links/app_links.dart';
 
 void main() async {
@@ -64,18 +65,26 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _determineInitialScreen() async {
-    final prefs = await SharedPreferences.getInstance();
-    final bool isFirstTime = prefs.getBool('isFirstTime') ?? true;
     final user = Supabase.instance.client.auth.currentUser;
 
     if (user != null) {
       await Supabase.instance.client.auth.refreshSession();
       if (user.emailConfirmedAt != null) {
-        if (isFirstTime) {
-          prefs.setBool('isFirstTime', false);
-          _setInitialScreen(const WelcomePage());
+        final userData = user.userMetadata;
+        final role = userData?['role'] as String?;
+
+        if (role == null) {
+          _setInitialScreen(RoleSelectionPage(
+            userId: user.id,
+            userEmail: user.email ?? '',
+            userPhone: userData?['phone'] as String? ?? '',
+          ));
         } else {
-          _setInitialScreen(const HomePage());
+          if (role == 'driver') {
+            _setInitialScreen(const AddInformationPage());
+          } else if (role == 'passenger') {
+            _setInitialScreen(const AskLocationScreen());
+          }
         }
       } else {
         _setInitialScreen(const WelcomePage());

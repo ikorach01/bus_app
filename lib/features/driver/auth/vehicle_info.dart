@@ -106,181 +106,158 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(
+        title: const Text('Vehicle Information', style: TextStyle(color: Colors.white)),
+        backgroundColor: const Color(0xFF9CB3F9),
+        elevation: 0,
+      ),
       body: Container(
-        width: 412,
-        height: 917,
-        clipBehavior: Clip.antiAlias,
-        decoration: BoxDecoration(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment(1.00, -0.01),
-            end: Alignment(-0.00, 1.00),
-            colors: [Color(0xFF9CB3FA), Color(0xFF2A52CA), Color(0xFF2C54CB), Color(0xFF14212F)],
+            begin: Alignment(-0.20, -0.98),
+            end: Alignment(0.2, 0.98),
+            colors: [Color(0xFF9CB3F9), Color(0xFF2A52C9), Color(0xFF14202E)],
           ),
         ),
-        child: Stack(
-          children: [
-            // Registration Plate Field
-            Positioned(
-              left: 16,
-              top: 96,
-              child: Container(
-                width: 379,
-                height: 147,
-                decoration: ShapeDecoration(
-                  color: Color(0xFFEAEEFB),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(width: 1, color: Color(0xFF666666)),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Registration Plate',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 24,
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      TextField(
-                        controller: registrationPlateController,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Enter registration plate',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Bus Name Field
-            Positioned(
-              left: 16,
-              top: 280,
-              child: Container(
-                width: 379,
-                height: 147,
-                decoration: ShapeDecoration(
-                  color: Color(0xFFEAEEFB),
-                  shape: RoundedRectangleBorder(
-                    side: BorderSide(width: 1, color: Color(0xFF666666)),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Bus Name',
-                        style: TextStyle(
-                          color: Colors.black,
-                          fontSize: 24,
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                      SizedBox(height: 10),
-                      TextField(
-                        controller: busNameController,
-                        decoration: InputDecoration(
-                          border: OutlineInputBorder(),
-                          hintText: 'Enter bus name',
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
-
-            // Photo of the Bus
-            Positioned(
-              left: 111,
-              top: 498,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Photo of the bus',
-                    style: TextStyle(
-                      color: Colors.black,
-                      fontSize: 24,
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                  SizedBox(height: 10),
-                  GestureDetector(
-                    onTap: _pickImage,
-                    child: Container(
-                      width: 241,
-                      height: 218,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(8),
-                        image: _busImage != null
-                            ? DecorationImage(
-                                image: FileImage(_busImage!),
-                                fit: BoxFit.cover,
-                              )
-                            : DecorationImage(
-                                image: AssetImage(
-                                    'assets/images/vehicle.png'),
-                                fit: BoxFit.cover,
-                              ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            // Done Button
-            Positioned(
-              left: 79,
-              top: 837,
-              child: GestureDetector(
-                onTap: _submitVehicleInfo,
-                child: Container(
-                  width: 254,
-                  height: 46,
-                  clipBehavior: Clip.antiAlias,
-                  decoration: ShapeDecoration(
-                    color: Color(0xFF547CF5),
-                    shape: RoundedRectangleBorder(
-                      side: BorderSide(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 32),
+              Center(
+                child: GestureDetector(
+                  onTap: _pickImage,
+                  child: Container(
+                    width: 200,
+                    height: 160,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.2),
                         width: 1,
-                        color: Colors.white.withOpacity(0.5),
                       ),
-                      borderRadius: BorderRadius.circular(30),
                     ),
+                    child: _busImage != null
+                        ? ClipRRect(
+                            borderRadius: BorderRadius.circular(16),
+                            child: Image.file(
+                              _busImage!,
+                              fit: BoxFit.cover,
+                            ),
+                          )
+                        : Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.add_a_photo_outlined,
+                                color: Colors.white.withOpacity(0.7),
+                                size: 48,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                'Upload Bus Photo',
+                                style: TextStyle(
+                                  color: Colors.white.withOpacity(0.7),
+                                  fontSize: 16,
+                                ),
+                              ),
+                            ],
+                          ),
                   ),
-                  child: Center(
-                    child: Text(
-                      'Done',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 26,
-                        fontFamily: 'Inter',
-                        fontWeight: FontWeight.w700,
-                      ),
+                ),
+              ),
+              const SizedBox(height: 32),
+              Text(
+                'Vehicle Details',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.9),
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Please provide your vehicle information',
+                style: TextStyle(
+                  color: Colors.white.withOpacity(0.7),
+                  fontSize: 16,
+                ),
+              ),
+              const SizedBox(height: 32),
+              _buildTextField(
+                controller: registrationPlateController,
+                label: 'Registration Plate',
+                icon: Icons.credit_card_outlined,
+                hint: 'Enter registration plate number',
+              ),
+              const SizedBox(height: 16),
+              _buildTextField(
+                controller: busNameController,
+                label: 'Bus Name',
+                icon: Icons.directions_bus_outlined,
+                hint: 'Enter bus name or number',
+              ),
+              const SizedBox(height: 40),
+              SizedBox(
+                width: double.infinity,
+                height: 56,
+                child: ElevatedButton(
+                  onPressed: _submitVehicleInfo,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF2A52C9),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    elevation: 2,
+                  ),
+                  child: const Text(
+                    'Save Vehicle Information',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 32),
+            ],
+          ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    required String hint,
+  }) {
+    return TextField(
+      controller: controller,
+      style: const TextStyle(color: Colors.white),
+      decoration: InputDecoration(
+        labelText: label,
+        hintText: hint,
+        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
+        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+        prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0xFF2A52C9), width: 2),
+        ),
+        filled: true,
+        fillColor: Colors.white.withOpacity(0.1),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       ),
     );
   }
