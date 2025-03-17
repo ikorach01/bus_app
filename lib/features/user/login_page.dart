@@ -24,102 +24,101 @@ class _LoginPageState extends State<LoginPage> {
   bool isLogin = true;
   bool isLoading = false;
 
-Future<void> _authenticate() async {
-  setState(() => isLoading = true);
+  Future<void> _authenticate() async {
+    setState(() => isLoading = true);
 
-  try {
-    if (isLogin) {
-      print('Attempting to sign in with email: ${emailController.text.trim()}');
-      
-      final response = await supabase.auth.signInWithPassword(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-      );
-
-      final user = response.user;
-      if (user == null) {
-        throw Exception('Login failed. Please check your credentials.');
-      }
-      
-      print('User signed in successfully: ${user.id}');
-      
-      if (user.emailConfirmedAt == null) {
-        throw Exception('Please confirm your email before logging in.');
-      }
-
-      // جلب بيانات المستخدم من Supabase
-      final session = supabase.auth.currentSession;
-      final userData = session?.user.userMetadata;
-      final role = userData?['role'] as String?;
-      
-      print('User metadata: $userData');
-      print('User role: $role');
-
-      if (role == null) {
-        // المستخدم يسجل الدخول لأول مرة ولم يحدد دوره بعد
-        print('First-time login detected. Redirecting to role selection.');
-        if (!context.mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => RoleSelectionPage(
-              userId: user.id,
-              userEmail: user.email ?? '',
-              userPhone: userData?['phone'] as String? ?? '',
-            ),
-          ),
+    try {
+      if (isLogin) {
+        print('Attempting to sign in with email: ${emailController.text.trim()}');
+        
+        final response = await supabase.auth.signInWithPassword(
+          email: emailController.text.trim(),
+          password: passwordController.text.trim(),
         );
+
+        final user = response.user;
+        if (user == null) {
+          throw Exception('Login failed. Please check your credentials.');
+        }
+        
+        print('User signed in successfully: ${user.id}');
+        
+        if (user.emailConfirmedAt == null) {
+          throw Exception('Please confirm your email before logging in.');
+        }
+
+        // جلب بيانات المستخدم من Supabase
+        final session = supabase.auth.currentSession;
+        final userData = session?.user.userMetadata;
+        final role = userData?['role'] as String?;
+        
+        print('User metadata: $userData');
+        print('User role: $role');
+
+        if (role == null) {
+          // المستخدم يسجل الدخول لأول مرة ولم يحدد دوره بعد
+          print('First-time login detected. Redirecting to role selection.');
+          if (!context.mounted) return;
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => RoleSelectionPage(
+                userId: user.id,
+                userEmail: user.email ?? '',
+                userPhone: userData?['phone'] as String? ?? '',
+              ),
+            ),
+          );
+        } else {
+          // المستخدم لديه دور مسجل، الانتقال بناءً على الدور
+          print('Existing user detected with role: $role. Redirecting accordingly.');
+          if (!context.mounted) return;
+          if (role == 'passenger') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const AskLocationScreen()),
+            );
+          } else if (role == 'driver') {
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const AddInformationPage()),
+            );
+          }
+        }
       } else {
-        // المستخدم لديه دور مسجل، الانتقال بناءً على الدور
-        print('Existing user detected with role: $role. Redirecting accordingly.');
-        if (!context.mounted) return;
-        if (role == 'passenger') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const AskLocationScreen()),
-          );
-        } else if (role == 'driver') {
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const AddInformationPage()),
-          );
+        if (passwordController.text != confirmPasswordController.text) {
+          throw Exception("Passwords do not match.");
+        }
+
+        print('Attempting to sign up with email: ${emailController.text.trim()}');
+        
+        final response = await supabase.auth.signUp(
+          email: emailController.text.trim(),
+          password: passwordController.text.trim(),
+          emailRedirectTo: 'bus_app://auth/callback',
+          data: {
+            'phone': phoneController.text.trim(),
+            'role': null, // لم يتم تحديد الدور بعد، سيتم تحديده لاحقًا
+          },
+        );
+
+        final user = response.user;
+        if (user != null) {
+          print('User signed up successfully: ${user.id}');
+          
+          _showMessage('Registration successful! Please check your email to confirm your account.', Colors.green);
+          
+          setState(() {
+            isLogin = true; // التبديل إلى وضع تسجيل الدخول
+          });
         }
       }
-    } else {
-      if (passwordController.text != confirmPasswordController.text) {
-        throw Exception("Passwords do not match.");
-      }
-
-      print('Attempting to sign up with email: ${emailController.text.trim()}');
-      
-      final response = await supabase.auth.signUp(
-        email: emailController.text.trim(),
-        password: passwordController.text.trim(),
-        emailRedirectTo: 'bus_app://auth/callback',
-        data: {
-          'phone': phoneController.text.trim(),
-          'role': null, // لم يتم تحديد الدور بعد، سيتم تحديده لاحقًا
-        },
-      );
-
-      final user = response.user;
-      if (user != null) {
-        print('User signed up successfully: ${user.id}');
-        
-        _showMessage('Registration successful! Please check your email to confirm your account.', Colors.green);
-        
-        setState(() {
-          isLogin = true; // التبديل إلى وضع تسجيل الدخول
-        });
-      }
+    } catch (e) {
+      _showMessage(e.toString(), Colors.red);
     }
-  } catch (e) {
-    _showMessage(e.toString(), Colors.red);
+
+    setState(() => isLoading = false);
   }
-
-  setState(() => isLoading = false);
-}
-
 
   void _showMessage(String message, Color color) {
     ScaffoldMessenger.of(context).showSnackBar(
