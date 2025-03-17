@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'add_information.dart'; // استيراد صفحة add_information.dart
+import 'add_information.dart'; // تأكد من استيراد الصفحة بشكل صحيح
 
 class BasicInfoPage extends StatefulWidget {
   const BasicInfoPage({Key? key}) : super(key: key);
@@ -17,7 +17,7 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
 
   void _validateAndNavigate(BuildContext context) {
     if (_formKey.currentState!.validate()) {
-      // التحقق من صحة البيانات
+      // التحقق من أن جميع الحقول غير فارغة
       if (_firstNameController.text.isEmpty ||
           _lastNameController.text.isEmpty ||
           _dateOfBirthController.text.isEmpty ||
@@ -55,7 +55,7 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Basic Information'),
-        backgroundColor: const Color(0xFF14212F),
+        backgroundColor: const Color(0xFF9CB3F9),
       ),
       body: Container(
         width: double.infinity,
@@ -68,89 +68,92 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
           ),
         ),
         child: SingleChildScrollView(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const SizedBox(height: 20),
-              // إضافة الصورة في الأعلى
-              Container(
-                width: 160,
-                height: 160,
-                decoration: BoxDecoration(
-                  image: DecorationImage(
-                    image: AssetImage("assets/images/driver3.png"),
-                    fit: BoxFit.cover,
+          child: Form(
+            key: _formKey, // ربط Form بـ _formKey
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const SizedBox(height: 20),
+                // إضافة الصورة في الأعلى
+                Container(
+                  width: 160,
+                  height: 160,
+                  decoration: BoxDecoration(
+                    image: DecorationImage(
+                      image: AssetImage("assets/images/driver3.png"),
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
-              ),
-              const SizedBox(height: 20),
-              _buildTextField(
-                controller: _firstNameController,
-                label: 'First Name',
-                icon: Icons.person,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your first name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              _buildTextField(
-                controller: _lastNameController,
-                label: 'Last Name',
-                icon: Icons.person,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your last name';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              _buildTextField(
-                controller: _dateOfBirthController,
-                label: 'Date of Birth',
-                icon: Icons.calendar_today,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your date of birth';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 20),
-              _buildTextField(
-                controller: _emailController,
-                label: 'Email Address',
-                icon: Icons.email,
-                validator: (value) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please enter your email address';
-                  }
-                  if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
-                    return 'Please enter a valid email address';
-                  }
-                  return null;
-                },
-              ),
-              const SizedBox(height: 40),
-              ElevatedButton(
-                onPressed: () => _validateAndNavigate(context),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
-                  backgroundColor: Colors.white.withOpacity(0.1),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  controller: _firstNameController,
+                  label: 'First Name',
+                  icon: Icons.person,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your first name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  controller: _lastNameController,
+                  label: 'Last Name',
+                  icon: Icons.person,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your last name';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  controller: _dateOfBirthController,
+                  label: 'Date of Birth',
+                  icon: Icons.calendar_today,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your date of birth';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 20),
+                _buildTextField(
+                  controller: _emailController,
+                  label: 'Email Address',
+                  icon: Icons.email,
+                  validator: (value) {
+                    if (value == null || value.isEmpty) {
+                      return 'Please enter your email address';
+                    }
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                      return 'Please enter a valid email address';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 40),
+                ElevatedButton(
+                  onPressed: () => _validateAndNavigate(context),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 15),
+                    backgroundColor: Colors.white.withOpacity(0.1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text(
+                    'Done',
+                    style: TextStyle(color: Colors.white, fontSize: 16),
                   ),
                 ),
-                child: const Text(
-                  'Done',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                ),
-              ),
-              const SizedBox(height: 20),
-            ],
+                const SizedBox(height: 20),
+              ],
+            ),
           ),
         ),
       ),
