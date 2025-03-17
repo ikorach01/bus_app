@@ -31,6 +31,32 @@ class _HomePageState extends State<HomePage> {
     },
   ];
 
+  // بيانات وهمية للحافلات
+  final List<Map<String, dynamic>> _mockBuses = [
+    {
+      'busNumber': '101',
+      'destination': 'Nearby Municipalities Station',
+      'currentSpeed': '50 km/h',
+      'busImage': 'assets/images/OIP (4).jpg', // المسار المحلي للصورة
+      'expectedArrivalTime': '10 min',
+      'driverName': 'John Doe', // اسم السائق
+      'finalDestination': 'Central Station', // المحطة النهائية
+      'position': LatLng(27.874, -0.285), // موقع الحافلة على الخريطة
+    },
+    {
+      'busNumber': '202',
+      'destination': 'Distant Municipalities Station',
+      'currentSpeed': '45 km/h',
+      'busImage': 'assets/images/OIP (4).jpg', // المسار المحلي للصورة
+      'expectedArrivalTime': '15 min',
+      'driverName': 'Jane Smith', // اسم السائق
+      'finalDestination': 'North Station', // المحطة النهائية
+      'position': LatLng(27.882, -0.281), // موقع الحافلة على الخريطة
+    },
+  ];
+
+  Map<String, dynamic>? _selectedBus; // الحافلة المختارة
+
   @override
   void initState() {
     super.initState();
@@ -40,18 +66,32 @@ class _HomePageState extends State<HomePage> {
 
   Future<void> _getUserLocation() async {
     Location location = Location();
+    
+    // التحقق من تمكين خدمة الموقع
     bool serviceEnabled = await location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await location.requestService();
-      if (!serviceEnabled) return;
+      if (!serviceEnabled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Location service is disabled. Please enable it.")),
+        );
+        return;
+      }
     }
 
+    // التحقق من أذونات الموقع
     PermissionStatus permissionGranted = await location.hasPermission();
     if (permissionGranted == PermissionStatus.denied) {
       permissionGranted = await location.requestPermission();
-      if (permissionGranted != PermissionStatus.granted) return;
+      if (permissionGranted != PermissionStatus.granted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Location permissions are denied. Please grant them.")),
+        );
+        return;
+      }
     }
 
+    // الحصول على الموقع الحالي
     LocationData locationData = await location.getLocation();
     setState(() {
       _currentLocation = locationData;
@@ -72,7 +112,7 @@ class _HomePageState extends State<HomePage> {
   Future<void> _calculateRoute() async {
     if (_currentLocation == null || _selectedStation == null) return;
 
-    final String apiKey = "0mLFOCbR4d37yR14JI6y1QL3kztkWhKff3tjn95qc8U"; // Replace with your HERE API key
+    final String apiKey = "0mLFOCbR4d37yR14JI6y1QL3kztkWhKff3tjn95qc8U"; // استبدل بمفتاح API الخاص بك
     final Uri url = Uri.parse(
         "https://router.hereapi.com/v8/routes?apikey=$apiKey&transportMode=bus&origin=${_currentLocation!.latitude},${_currentLocation!.longitude}&destination=${_selectedStation!.latitude},${_selectedStation!.longitude}&return=polyline,travelSummary");
 
@@ -81,13 +121,13 @@ class _HomePageState extends State<HomePage> {
       final data = json.decode(response.body);
       final route = data['routes'][0];
 
-      // Extract estimated travel time
+      // استخراج الوقت المتوقع للسفر
       final int estimatedTimeSeconds = route['sections'][0]['travelSummary']['duration'];
       final Duration duration = Duration(seconds: estimatedTimeSeconds);
       final String estimatedTime =
           "${duration.inMinutes} min${duration.inMinutes > 1 ? 's' : ''}";
 
-      // Extract polyline points for the route
+      // استخراج نقاط الخطوط للطريق
       final polyline = route['sections'][0]['polyline'];
       final decodedPoints = _decodePolyline(polyline);
 
@@ -109,6 +149,49 @@ class _HomePageState extends State<HomePage> {
       points.add(LatLng(lat / 1e5, lon / 1e5));
     }
     return points;
+  }
+
+  void _showBusDetails(Map<String, dynamic> bus) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Bus ${bus['busNumber']}'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // عرض صورة الحافلة
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    bus['busImage'],
+                    height: 150,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Text('Destination: ${bus['destination']}'), // الوجهة
+                Text('Speed: ${bus['currentSpeed']}'), // السرعة الحالية
+                Text('Expected Arrival: ${bus['expectedArrivalTime']}'), // الوقت المتوقع
+                Text('Driver: ${bus['driverName']}'), // اسم السائق
+                Text('Final Destination: ${bus['finalDestination']}'), // المحطة النهائية
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(context);
+              },
+              child: const Text('Close'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   @override
@@ -135,20 +218,19 @@ class _HomePageState extends State<HomePage> {
                     Polyline(
                       points: _routePoints,
                       strokeWidth: 5.0,
-                      color: Colors.red, // Route color
+                      color: Colors.red,
                     ),
                   ],
                 ),
-              // Add CircleLayer for user's current location
               if (_currentLocation != null)
                 CircleLayer(
                   circles: [
                     CircleMarker(
                       point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
-                      color: Colors.blue.withOpacity(0.3), // Circle color with transparency
-                      borderColor: Colors.blue, // Border color
-                      borderStrokeWidth: 2.0, // Border width
-                      radius: 10.0, // Reduced radius to make the circle smaller
+                      color: Colors.blue.withOpacity(0.3),
+                      borderColor: Colors.blue,
+                      borderStrokeWidth: 2.0,
+                      radius: 10.0,
                     ),
                   ],
                 ),
@@ -167,6 +249,22 @@ class _HomePageState extends State<HomePage> {
                       width: 40,
                       height: 40,
                       child: const Icon(Icons.directions_bus, color: Colors.blue, size: 30),
+                    ),
+                  // عرض الحافلات على الخريطة
+                  for (final bus in _mockBuses)
+                    Marker(
+                      point: bus['position'],
+                      width: 40,
+                      height: 40,
+                      child: GestureDetector(
+                        onTap: () {
+                          setState(() {
+                            _selectedBus = bus;
+                          });
+                          _showBusDetails(bus);
+                        },
+                        child: const Icon(Icons.directions_bus, color: Colors.red, size: 30),
+                      ),
                     ),
                 ],
               ),
@@ -192,33 +290,31 @@ class _HomePageState extends State<HomePage> {
                 borderRadius: BorderRadius.circular(16),
               ),
               child: Column(
-                mainAxisSize: MainAxisSize.min, // To make the container take only the required space
+                mainAxisSize: MainAxisSize.min,
                 children: [
                   const Text(
                     "Select a Station",
                     style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
-                  // Nearby Municipalities Station Button
                   ElevatedButton(
                     onPressed: () {
                       _updateSelectedStation(_stations[0]);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFCAD7FF), // Button color
-                      minimumSize: const Size(double.infinity, 50), // Full width and fixed height
+                      backgroundColor: const Color(0xFFCAD7FF),
+                      minimumSize: const Size(double.infinity, 50),
                     ),
                     child: Text(_stations[0]['name']),
                   ),
-                  const SizedBox(height: 10), // Space between buttons
-                  // Distant Municipalities Station Button
+                  const SizedBox(height: 10),
                   ElevatedButton(
                     onPressed: () {
                       _updateSelectedStation(_stations[1]);
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFCAD7FF), // Button color
-                      minimumSize: const Size(double.infinity, 50), // Full width and fixed height
+                      backgroundColor: const Color(0xFFCAD7FF),
+                      minimumSize: const Size(double.infinity, 50),
                     ),
                     child: Text(_stations[1]['name']),
                   ),
