@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'basic_info.dart';
 import 'driver_licence.dart';
 import 'vehicle_info.dart';
-import '../driver_home/quick_icons.dart'; // Updated import path
+import '../driver_home/home_page2.dart'; // Updated import path
 
 final supabase = Supabase.instance.client;
 
@@ -57,7 +57,7 @@ class _AddInformationPageState extends State<AddInformationPage> {
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (context) => QuickIconsInterface(),
+          builder: (context) => const HomePage2(),
         ),
       );
     } catch (e) {
@@ -177,7 +177,7 @@ class _AddInformationPageState extends State<AddInformationPage> {
                     Navigator.pushReplacement(
                       context,
                       MaterialPageRoute(
-                        builder: (context) => const QuickIconsInterface(),
+                        builder: (context) => const HomePage2(),
                       ),
                     );
                   },
