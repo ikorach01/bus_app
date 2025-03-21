@@ -54,6 +54,9 @@ class _LoginPageState extends State<LoginPage> {
         
         print('User metadata: $userData');
         print('User role: $role');
+        
+        // Check if user exists in the database and insert if not
+        await _checkAndInsertUserData(user, role);
 
         if (role == null) {
           // المستخدم يسجل الدخول لأول مرة ولم يحدد دوره بعد
@@ -106,6 +109,40 @@ class _LoginPageState extends State<LoginPage> {
         if (user != null) {
           print('User signed up successfully: ${user.id}');
           
+          // Insert user data into the users table
+          try {
+            print('Attempting to insert user data into users table...');
+            print('User ID: ${user.id}');
+            print('Email: ${emailController.text.trim()}');
+            print('Phone: ${phoneController.text.trim()}');
+            
+            // Check if the users table exists and is accessible
+            try {
+              final tableCheck = await supabase.from('users').select('count').limit(1);
+              print('Users table check result: $tableCheck');
+            } catch (tableError) {
+              print('Error checking users table: $tableError');
+              print('This may indicate that the users table does not exist or you do not have access to it');
+            }
+            
+            // Get schema information
+            try {
+              // Use REST API directly to avoid execute method issue
+              final schemaInfo = await supabase
+                  .from('information_schema.tables')
+                  .select('table_name, table_schema')
+                  .eq('table_name', 'users');
+              print('Schema info for users table: $schemaInfo');
+            } catch (schemaError) {
+              print('Error getting schema info: $schemaError');
+            }
+            
+            // Try multiple approaches to insert the user data
+            await _insertUserWithMultipleApproaches(user);
+          } catch (dbError) {
+            print('Error in database operations: $dbError');
+          }
+          
           _showMessage('Registration successful! Please check your email to confirm your account.', Colors.green);
           
           setState(() {
@@ -114,10 +151,136 @@ class _LoginPageState extends State<LoginPage> {
         }
       }
     } catch (e) {
+      print('Authentication error: $e');
       _showMessage(e.toString(), Colors.red);
     }
 
     setState(() => isLoading = false);
+  }
+  
+  // Helper function to check if user exists in database and insert if not
+  Future<void> _checkAndInsertUserData(User user, String? role) async {
+    try {
+      print('Checking if user exists in database: ${user.id}');
+      
+      // Check if user exists in the users table
+      final existingUser = await supabase
+          .from('users')
+          .select()
+          .eq('id', user.id)
+          .maybeSingle();
+      
+      print('Existing user check result: $existingUser');
+      
+      if (existingUser == null) {
+        print('User not found in database, inserting now...');
+        await _insertUserWithMultipleApproaches(user, role: role);
+      } else {
+        print('User already exists in database');
+        
+        // Update role if needed
+        if (role != null && (existingUser['role'] == null || existingUser['role'] != role)) {
+          print('Updating user role to: $role');
+          await supabase
+              .from('users')
+              .update({
+                'role': role,
+                'updated_at': DateTime.now().toIso8601String()
+              })
+              .eq('id', user.id);
+          print('User role updated successfully');
+        }
+      }
+    } catch (e) {
+      print('Error in _checkAndInsertUserData: $e');
+    }
+  }
+  
+  // Helper function to try multiple approaches for inserting user data
+  Future<void> _insertUserWithMultipleApproaches(User user, {String? role}) async {
+    // Try direct SQL query using stored procedure
+    try {
+      print('Approach 1: Using stored procedure...');
+      await supabase.rpc('create_user', params: {
+        'user_id': user.id,
+        'user_email': user.email ?? emailController.text.trim(),
+        'user_phone': phoneController.text.trim(),
+        'user_role': role,
+      });
+      print('User created via stored procedure');
+      return; // Exit if successful
+    } catch (rpcError) {
+      print('Error with stored procedure: $rpcError');
+    }
+    
+    // Approach 2: Standard insert
+    try {
+      print('Approach 2: Standard insert...');
+      final userData = {
+        'id': user.id,
+        'email': user.email ?? emailController.text.trim(),
+        'phone': phoneController.text.trim(),
+        'created_at': DateTime.now().toIso8601String(),
+      };
+      
+      // Add role if provided
+      if (role != null) {
+        userData['role'] = role;
+      }
+      
+      print('Inserting data: $userData');
+      await supabase.from('users').insert(userData);
+      print('User data inserted into users table');
+      return; // Exit if successful
+    } catch (insertError) {
+      print('Error with standard insert: $insertError');
+      
+      if (insertError is PostgrestException) {
+        print('PostgrestException code: ${insertError.code}');
+        print('PostgrestException message: ${insertError.message}');
+        print('PostgrestException details: ${insertError.details}');
+      }
+    }
+    
+    // Approach 3: Upsert
+    try {
+      print('Approach 3: Trying upsert...');
+      final userData = {
+        'id': user.id,
+        'email': user.email ?? emailController.text.trim(),
+        'phone': phoneController.text.trim(),
+      };
+      
+      // Add role if provided
+      if (role != null) {
+        userData['role'] = role;
+      }
+      
+      await supabase.from('users').upsert(userData);
+      print('User upserted successfully');
+      return; // Exit if successful
+    } catch (upsertError) {
+      print('Error with upsert: $upsertError');
+    }
+    
+    // Approach 4: Minimal insert
+    try {
+      print('Approach 4: Minimal insert...');
+      final userData = {
+        'id': user.id,
+        'email': user.email ?? emailController.text.trim(),
+      };
+      
+      // Add role if provided
+      if (role != null) {
+        userData['role'] = role;
+      }
+      
+      await supabase.from('users').insert(userData);
+      print('Minimal user record created');
+    } catch (minimalError) {
+      print('Error with minimal insert: $minimalError');
+    }
   }
 
   void _showMessage(String message, Color color) {
