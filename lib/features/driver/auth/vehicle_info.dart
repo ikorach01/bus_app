@@ -2,11 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart'; // For image picking
 import 'dart:io'; // For handling file paths
 import 'package:supabase_flutter/supabase_flutter.dart'; // For Supabase integration
+import 'add_information.dart'; // Import the AddInformationPage
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 
 final supabase = Supabase.instance.client;
 
 class VehicleInfoPage extends StatefulWidget {
-  const VehicleInfoPage({super.key});
+  final Map<String, dynamic>? driverData;
+  
+  const VehicleInfoPage({super.key, this.driverData});
 
   @override
   State<VehicleInfoPage> createState() => _VehicleInfoPageState();
@@ -15,10 +20,81 @@ class VehicleInfoPage extends StatefulWidget {
 class _VehicleInfoPageState extends State<VehicleInfoPage> {
   final TextEditingController registrationPlateController = TextEditingController();
   final TextEditingController busNameController = TextEditingController();
-
-  File? _busImage;
-
   final ImagePicker _picker = ImagePicker();
+  File? _busImage;
+  Map<String, dynamic> _driverData = {};
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.driverData != null) {
+      _driverData = Map.from(widget.driverData!);
+      
+      // Pre-fill fields if data exists
+      if (_driverData.containsKey('vehicle_registration_plate')) {
+        registrationPlateController.text = _driverData['vehicle_registration_plate'];
+      }
+      if (_driverData.containsKey('bus_name')) {
+        busNameController.text = _driverData['bus_name'];
+      }
+    }
+    
+    // Load any saved data from SharedPreferences
+    _loadSavedData();
+  }
+  
+  @override
+  void dispose() {
+    // Save data when the page is disposed
+    _saveData();
+    super.dispose();
+  }
+  
+  Future<void> _loadSavedData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedData = prefs.getString('driver_data');
+    
+    if (savedData != null && savedData.isNotEmpty) {
+      try {
+        final Map<String, dynamic> parsedData = jsonDecode(savedData);
+        setState(() {
+          // Merge saved data with current data
+          _driverData.addAll(parsedData);
+          
+          // Pre-fill text fields with saved data
+          if (_driverData.containsKey('vehicle_registration_plate')) {
+            registrationPlateController.text = _driverData['vehicle_registration_plate'];
+          }
+          if (_driverData.containsKey('bus_name')) {
+            busNameController.text = _driverData['bus_name'];
+          }
+        });
+      } catch (e) {
+        print('Error loading saved data: $e');
+      }
+    }
+  }
+  
+  Future<void> _saveData() async {
+    // Update driver data with current field values
+    _driverData['vehicle_registration_plate'] = registrationPlateController.text.trim();
+    _driverData['bus_name'] = busNameController.text.trim();
+    
+    final prefs = await SharedPreferences.getInstance();
+    
+    // We need to handle binary data for SharedPreferences
+    // Create a copy of the data without binary fields
+    final Map<String, dynamic> dataToSave = Map.from(_driverData);
+    
+    // Remove binary data as it can't be stored in SharedPreferences
+    dataToSave.remove('bus_image');
+    dataToSave.remove('grey_card_image_front');
+    dataToSave.remove('grey_card_image_back');
+    dataToSave.remove('license_image_front');
+    dataToSave.remove('license_image_back');
+    
+    await prefs.setString('driver_data', jsonEncode(dataToSave));
+  }
 
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
@@ -26,37 +102,55 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
       setState(() {
         _busImage = File(image.path);
       });
+      
+      // Read the image as bytes and store in driverData
+      final bytes = await _busImage!.readAsBytes();
+      _driverData['bus_image'] = bytes;
+      
+      // Save data after picking image
+      _saveData();
     }
   }
 
   bool _validateInputs() {
-    if (registrationPlateController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter the registration plate.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return false;
+    // Create a specific error message based on what's missing
+    List<String> missingFields = [];
+    
+    if (registrationPlateController.text.trim().isEmpty) {
+      missingFields.add('Registration plate number');
     }
-    if (busNameController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please enter the bus name.'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return false;
+    
+    if (busNameController.text.trim().isEmpty) {
+      missingFields.add('Bus name');
     }
+    
     if (_busImage == null) {
+      missingFields.add('Bus image');
+    }
+    
+    if (missingFields.isNotEmpty) {
+      String errorMessage = 'Please complete the following:';
+      for (var field in missingFields) {
+        errorMessage += '\n• $field is required';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Please upload a photo of the bus.'),
+        SnackBar(
+          content: Text(errorMessage),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
         ),
       );
       return false;
     }
+    
     return true;
   }
 
@@ -64,40 +158,40 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
     if (!_validateInputs()) return;
 
     try {
-      final user = supabase.auth.currentUser;
-      if (user == null) {
-        throw Exception('User not logged in.');
-      }
-
-      // Insert data into the `buses` table
-      final response = await supabase.from('buses').insert({
-        'user_id': user.id,
-        'registration_plate': registrationPlateController.text.trim(),
-        'bus_name': busNameController.text.trim(),
-        'bus_image_path': _busImage?.path,
-      });
-
-      if (response.error != null) {
-        throw Exception(response.error!.message);
-      }
-
-      // Show success message
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Vehicle information submitted successfully!'),
-          backgroundColor: Colors.green,
+      // Update driver data
+      _driverData['vehicle_registration_plate'] = registrationPlateController.text.trim();
+      _driverData['bus_name'] = busNameController.text.trim();
+      
+      // Save data before navigating
+      await _saveData();
+      
+      // Navigate back to AddInformationPage with updated data
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => AddInformationPage(driverData: _driverData),
         ),
       );
-
-      // Navigate to the next page (if needed)
-      // Navigator.pushReplacement(...);
     } catch (e) {
-      if (!mounted) return;
+      // Determine the specific error
+      String errorMessage = 'An error occurred while saving vehicle information.';
+      
+      if (e.toString().contains('network')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      }
+      
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Error: ${e.toString()}'),
+          content: Text('$errorMessage\n\nDetails: ${e.toString()}'),
           backgroundColor: Colors.red,
+          duration: const Duration(seconds: 5),
+          action: SnackBarAction(
+            label: 'OK',
+            textColor: Colors.white,
+            onPressed: () {
+              ScaffoldMessenger.of(context).hideCurrentSnackBar();
+            },
+          ),
         ),
       );
     }
@@ -199,7 +293,7 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
                 controller: busNameController,
                 label: 'Bus Name',
                 icon: Icons.directions_bus_outlined,
-                hint: 'Enter bus name or number',
+                hint: 'Enter bus name or model',
               ),
               const SizedBox(height: 40),
               SizedBox(
@@ -238,26 +332,27 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
     required IconData icon,
     required String hint,
   }) {
-    return TextField(
-      controller: controller,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withOpacity(0.3)),
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-        prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFF2A52C9), width: 2),
+      ),
+      child: TextField(
+        controller: controller,
+        style: const TextStyle(color: Colors.white),
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          hintText: hint,
+          hintStyle: TextStyle(color: Colors.white.withOpacity(0.5)),
+          prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         ),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.1),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       ),
     );
   }

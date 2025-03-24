@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'trips_route.dart';
+import 'settings2.dart';
 
 class HomePage2 extends StatefulWidget {
   const HomePage2({Key? key}) : super(key: key);
@@ -224,7 +225,10 @@ class _HomePage2State extends State<HomePage2> {
             right: 80,
             child: GestureDetector(
               onTap: () {
-                // Navigate to settings page
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const Settings2Page()),
+                );
               },
               child: Container(
                 width: 48,
@@ -240,12 +244,10 @@ class _HomePage2State extends State<HomePage2> {
                     ),
                   ],
                 ),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.asset(
-                    'assets/images/settings.png',
-                    fit: BoxFit.cover,
-                  ),
+                child: const Icon(
+                  Icons.settings,
+                  color: Color(0xFF2A52C9),
+                  size: 24,
                 ),
               ),
             ),

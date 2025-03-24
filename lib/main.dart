@@ -1,4 +1,4 @@
- import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:bus_app/features/shared/welcome_page.dart';
 import 'package:bus_app/features/user/user_home/home_page.dart';

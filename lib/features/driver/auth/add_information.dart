@@ -1,59 +1,193 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
 import 'basic_info.dart';
 import 'driver_licence.dart';
 import 'vehicle_info.dart';
-import '../driver_home/home_page2.dart'; // Updated import path
+import '../driver_home/home_page2.dart';
 
 final supabase = Supabase.instance.client;
 
 class AddInformationPage extends StatefulWidget {
-  const AddInformationPage({Key? key}) : super(key: key);
+  final Map<String, dynamic>? driverData;
+  
+  const AddInformationPage({Key? key, this.driverData}) : super(key: key);
 
   @override
   _AddInformationPageState createState() => _AddInformationPageState();
 }
 
 class _AddInformationPageState extends State<AddInformationPage> {
-  final TextEditingController fullNameController = TextEditingController();
-  final TextEditingController licenseNumberController = TextEditingController();
-  final TextEditingController vehicleModelController = TextEditingController();
-  final TextEditingController vehiclePlateController = TextEditingController();
-
   bool isLoading = false;
+  Map<String, dynamic> _driverData = {};
+  
+  @override
+  void initState() {
+    super.initState();
+    if (widget.driverData != null) {
+      setState(() {
+        _driverData = Map.from(widget.driverData!);
+      });
+    }
+    
+    // Load any saved data from SharedPreferences
+    _loadSavedData();
+  }
+  
+  Future<void> _loadSavedData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedData = prefs.getString('driver_data');
+    
+    if (savedData != null && savedData.isNotEmpty) {
+      try {
+        final Map<String, dynamic> parsedData = jsonDecode(savedData);
+        setState(() {
+          _driverData.addAll(parsedData);
+        });
+      } catch (e) {
+        print('Error loading saved data: $e');
+      }
+    }
+  }
+  
+  Future<void> _saveData() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('driver_data', jsonEncode(_driverData));
+  }
 
   Future<void> _submitInformation() async {
-    setState(() => isLoading = true);
+    // Validate that all required fields are present
+    if (!_validateDriverData()) {
+      return;
+    }
+
+    // Show loading indicator
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const Center(
+          child: CircularProgressIndicator(),
+        );
+      },
+    );
 
     try {
+      // Get current user
       final user = supabase.auth.currentUser;
       if (user == null) {
-        throw Exception('User not logged in.');
+        // Close loading dialog
+        Navigator.pop(context);
+        _showErrorMessage('User not authenticated. Please log in again.');
+        return;
       }
 
-      // Insert data into the `drivers` table
-      final response = await supabase.from('drivers').insert({
+      // Format dates for PostgreSQL
+      String? formattedDob;
+      if (_driverData.containsKey('date_of_birth') && _driverData['date_of_birth'] != null) {
+        try {
+          final parts = _driverData['date_of_birth'].split('/');
+          if (parts.length == 3) {
+            formattedDob = '${parts[2]}-${parts[0]}-${parts[1]}'; // YYYY-MM-DD
+          } else {
+            throw Exception('Invalid date format for date of birth');
+          }
+        } catch (e) {
+          // Close loading dialog
+          Navigator.pop(context);
+          _showErrorMessage('Invalid date format for date of birth. Please use MM/DD/YYYY format.');
+          return;
+        }
+      } else {
+        // Close loading dialog
+        Navigator.pop(context);
+        _showErrorMessage('Date of birth is missing. Please complete the Basic Information section.');
+        return;
+      }
+
+      String? formattedLicenseExp;
+      if (_driverData.containsKey('license_expiration') && _driverData['license_expiration'] != null) {
+        try {
+          final parts = _driverData['license_expiration'].split('/');
+          if (parts.length == 3) {
+            formattedLicenseExp = '${parts[2]}-${parts[0]}-${parts[1]}'; // YYYY-MM-DD
+          } else {
+            throw Exception('Invalid date format for license expiration');
+          }
+        } catch (e) {
+          // Close loading dialog
+          Navigator.pop(context);
+          _showErrorMessage('Invalid date format for license expiration. Please use MM/DD/YYYY format.');
+          return;
+        }
+      } else {
+        // Close loading dialog
+        Navigator.pop(context);
+        _showErrorMessage('License expiration date is missing. Please complete the Driver License section.');
+        return;
+      }
+
+      String? formattedGreyCardExp;
+      if (_driverData.containsKey('grey_card_expiration') && _driverData['grey_card_expiration'] != null) {
+        try {
+          final parts = _driverData['grey_card_expiration'].split('/');
+          if (parts.length == 3) {
+            formattedGreyCardExp = '${parts[2]}-${parts[0]}-${parts[1]}'; // YYYY-MM-DD
+          } else {
+            throw Exception('Invalid date format for grey card expiration');
+          }
+        } catch (e) {
+          // Close loading dialog
+          Navigator.pop(context);
+          _showErrorMessage('Invalid date format for grey card expiration. Please use MM/DD/YYYY format.');
+          return;
+        }
+      } else {
+        // Close loading dialog
+        Navigator.pop(context);
+        _showErrorMessage('Grey card expiration date is missing. Please complete the Grey Card section.');
+        return;
+      }
+
+      // Prepare data for insertion
+      final driverData = {
         'user_id': user.id,
-        'full_name': fullNameController.text.trim(),
-        'license_number': licenseNumberController.text.trim(),
-        'vehicle_model': vehicleModelController.text.trim(),
-        'vehicle_plate': vehiclePlateController.text.trim(),
-      });
+        'first_name': _driverData['first_name'],
+        'last_name': _driverData['last_name'],
+        'date_of_birth': formattedDob,
+        'license_number': _driverData['license_number'],
+        'license_image_front': _driverData['license_image_front'],
+        'license_image_back': _driverData['license_image_back'],
+        'license_expiration': formattedLicenseExp,
+        'grey_card_number': _driverData['grey_card_number'],
+        'grey_card_image_front': _driverData['grey_card_image_front'],
+        'grey_card_image_back': _driverData['grey_card_image_back'],
+        'grey_card_expiration': formattedGreyCardExp,
+        'vehicle_registration_plate': _driverData['vehicle_registration_plate'],
+        'email_driver': _driverData['email_driver'],
+        'created_at': DateTime.now().toIso8601String(),
+      };
 
-      if (response.error != null) {
-        throw Exception(response.error!.message);
-      }
+      // Insert data into drivers table
+      await supabase.from('drivers').insert(driverData);
+      
+      // Clear saved data after successful submission
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('driver_data');
 
-      // Show success message
-      if (!mounted) return;
+      // Close loading dialog
+      Navigator.pop(context);
+
+      // Show success message and navigate to home
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Information submitted successfully!'),
+          content: Text('Registration completed successfully!'),
           backgroundColor: Colors.green,
         ),
       );
 
-      // Navigate to the QuickIconsInterface
+      // Navigate to driver home page
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -61,16 +195,63 @@ class _AddInformationPageState extends State<AddInformationPage> {
         ),
       );
     } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(e.toString()),
-          backgroundColor: Colors.red,
-        ),
-      );
+      // Close loading dialog
+      Navigator.pop(context);
+      
+      // Determine the specific error
+      String errorMessage = 'An error occurred during registration.';
+      
+      if (e.toString().contains('duplicate key')) {
+        errorMessage = 'A driver with this information already exists.';
+      } else if (e.toString().contains('violates foreign key constraint')) {
+        errorMessage = 'Invalid reference to another table. Please check your data.';
+      } else if (e.toString().contains('violates not-null constraint')) {
+        errorMessage = 'Missing required information. Please complete all sections.';
+      } else if (e.toString().contains('permission denied')) {
+        errorMessage = 'You do not have permission to register as a driver.';
+      } else if (e.toString().contains('network')) {
+        errorMessage = 'Network error. Please check your internet connection.';
+      }
+      
+      _showErrorMessage('$errorMessage\n\nDetails: ${e.toString()}');
     }
+  }
+  
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'OK',
+          textColor: Colors.white,
+          onPressed: () {
+            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+          },
+        ),
+      ),
+    );
+  }
 
-    setState(() => isLoading = false);
+  bool _validateDriverData() {
+    // Check if we have all required fields from the new schema
+    final requiredFields = [
+      'first_name', 'last_name', 'date_of_birth',
+      'license_number', 'license_image_front', 'license_image_back', 'license_expiration',
+      'grey_card_number', 'grey_card_image_front', 'grey_card_image_back', 'grey_card_expiration',
+      'vehicle_registration_plate', 'email_driver'
+    ];
+    
+    for (final field in requiredFields) {
+      if (!_driverData.containsKey(field) || 
+          _driverData[field] == null || 
+          _driverData[field].toString().isEmpty) {
+        return false;
+      }
+    }
+    
+    return true;
   }
 
   @override
@@ -132,12 +313,17 @@ class _AddInformationPageState extends State<AddInformationPage> {
                 label: 'Basic Information',
                 description: 'Name, phone, and contact details',
                 onPressed: () {
+                  // Save current data before navigating
+                  _saveData();
                   Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => BasicInfoPage(),
                     ),
-                  );
+                  ).then((value) {
+                    // Refresh the state when returning from BasicInfoPage
+                    setState(() {});
+                  });
                 },
               ),
               const SizedBox(height: 16),
@@ -146,12 +332,17 @@ class _AddInformationPageState extends State<AddInformationPage> {
                 label: 'Driver License',
                 description: 'License details and verification',
                 onPressed: () {
+                  // Save current data before navigating
+                  _saveData();
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const DriverLicensePage(),
+                      builder: (context) => DriverLicensePage(driverData: _driverData),
                     ),
-                  );
+                  ).then((value) {
+                    // Refresh the state when returning from DriverLicensePage
+                    setState(() {});
+                  });
                 },
               ),
               const SizedBox(height: 16),
@@ -160,12 +351,17 @@ class _AddInformationPageState extends State<AddInformationPage> {
                 label: 'Vehicle Information',
                 description: 'Car details and documentation',
                 onPressed: () {
+                  // Save current data before navigating
+                  _saveData();
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => const VehicleInfoPage(),
+                      builder: (context) => VehicleInfoPage(driverData: _driverData),
                     ),
-                  );
+                  ).then((value) {
+                    // Refresh the state when returning from VehicleInfoPage
+                    setState(() {});
+                  });
                 },
               ),
               const SizedBox(height: 40),
@@ -173,14 +369,7 @@ class _AddInformationPageState extends State<AddInformationPage> {
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pushReplacement(
-                      context,
-                      MaterialPageRoute(
-                        builder: (context) => const HomePage2(),
-                      ),
-                    );
-                  },
+                  onPressed: isLoading ? null : _submitInformation,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF2A52C9),
                     shape: RoundedRectangleBorder(
@@ -188,14 +377,16 @@ class _AddInformationPageState extends State<AddInformationPage> {
                     ),
                     elevation: 2,
                   ),
-                  child: const Text(
-                    'Complete Registration',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
+                  child: isLoading 
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        'Complete Registration',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                 ),
               ),
               const SizedBox(height: 32),

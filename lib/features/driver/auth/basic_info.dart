@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
-import 'add_information.dart'; // تأكد من استيراد الصفحة بشكل صحيح
+import 'package:shared_preferences/shared_preferences.dart';
+import 'dart:convert';
+import 'add_information.dart'; 
 
 class BasicInfoPage extends StatefulWidget {
   const BasicInfoPage({Key? key}) : super(key: key);
@@ -14,15 +16,87 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
   final _lastNameController = TextEditingController();
   final _dateOfBirthController = TextEditingController();
   final _emailController = TextEditingController();
+  Map<String, dynamic> _driverData = {};
 
-  void _validateAndNavigate(BuildContext context) {
+  @override
+  void initState() {
+    super.initState();
+    // Load any saved data from SharedPreferences
+    _loadSavedData();
+  }
+  
+  @override
+  void dispose() {
+    // Save data when the page is disposed
+    _saveData();
+    super.dispose();
+  }
+  
+  Future<void> _loadSavedData() async {
+    final prefs = await SharedPreferences.getInstance();
+    final savedData = prefs.getString('driver_data');
+    
+    if (savedData != null && savedData.isNotEmpty) {
+      try {
+        final Map<String, dynamic> parsedData = jsonDecode(savedData);
+        setState(() {
+          _driverData = parsedData;
+          
+          // Pre-fill text fields with saved data
+          if (_driverData.containsKey('first_name')) {
+            _firstNameController.text = _driverData['first_name'];
+          }
+          if (_driverData.containsKey('last_name')) {
+            _lastNameController.text = _driverData['last_name'];
+          }
+          if (_driverData.containsKey('date_of_birth')) {
+            _dateOfBirthController.text = _driverData['date_of_birth'];
+          }
+          if (_driverData.containsKey('email_driver')) {
+            _emailController.text = _driverData['email_driver'];
+          }
+        });
+      } catch (e) {
+        print('Error loading saved data: $e');
+      }
+    }
+  }
+  
+  Future<void> _saveData() async {
+    // Update driver data with current field values
+    _driverData['first_name'] = _firstNameController.text.trim();
+    _driverData['last_name'] = _lastNameController.text.trim();
+    _driverData['date_of_birth'] = _dateOfBirthController.text.trim();
+    _driverData['email_driver'] = _emailController.text.trim();
+    
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('driver_data', jsonEncode(_driverData));
+  }
+
+  Future<void> _selectDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now().subtract(const Duration(days: 365 * 18)), 
+      firstDate: DateTime(1950),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _dateOfBirthController.text =
+            "${picked.month.toString().padLeft(2, '0')}/${picked.day.toString().padLeft(2, '0')}/${picked.year.toString()}";
+      });
+      // Save data when date is selected
+      _saveData();
+    }
+  }
+
+  void _validateAndNavigate(BuildContext context) async {
     if (_formKey.currentState!.validate()) {
-      // التحقق من أن جميع الحقول غير فارغة
       if (_firstNameController.text.isEmpty ||
           _lastNameController.text.isEmpty ||
           _dateOfBirthController.text.isEmpty ||
           _emailController.text.isEmpty) {
-        // عرض رسالة خطأ إذا كانت البيانات غير صحيحة
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please fill all fields correctly.'),
@@ -31,7 +105,6 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
         );
       } else if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
           .hasMatch(_emailController.text)) {
-        // التحقق من صحة البريد الإلكتروني
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Please enter a valid email address.'),
@@ -39,13 +112,33 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
           ),
         );
       } else {
-        // الانتقال إلى صفحة add_information.dart إذا كانت البيانات صحيحة
+        // Save data before navigating
+        await _saveData();
+        
+        // Create driver data object
+        final driverData = {
+          'first_name': _firstNameController.text.trim(),
+          'last_name': _lastNameController.text.trim(),
+          'date_of_birth': _dateOfBirthController.text.trim(),
+          'email_driver': _emailController.text.trim(),
+        };
+        
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (context) => AddInformationPage(),
+            builder: (context) => AddInformationPage(driverData: driverData),
           ),
-        );
+        ).then((value) {
+          if (value != null) {
+            // Handle data returned from AddInformationPage
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Data returned: $value'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
+        });
       }
     }
   }
@@ -78,45 +171,52 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                 const SizedBox(height: 32),
                 Center(
                   child: Container(
-                    width: 160,
-                    height: 160,
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(16),
-                      image: const DecorationImage(
-                        image: AssetImage("assets/images/driver3.png"),
-                        fit: BoxFit.cover,
-                      ),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.person_outline_rounded,
+                          size: 48,
+                          color: Colors.white.withOpacity(0.9),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Personal Information',
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.9),
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
                 ),
                 const SizedBox(height: 32),
-                Center(
-                  child: Column(
-                    children: [
-                      Text(
-                        'Personal Details',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.9),
-                          fontSize: 24,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        'Please provide your personal information',
-                        style: TextStyle(
-                          color: Colors.white.withOpacity(0.7),
-                          fontSize: 16,
-                        ),
-                      ),
-                    ],
+                Text(
+                  'Your Details',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.9),
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
-                const SizedBox(height: 32),
+                const SizedBox(height: 8),
+                Text(
+                  'Please provide your personal information',
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.7),
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 24),
                 _buildTextField(
                   controller: _firstNameController,
                   label: 'First Name',
-                  icon: Icons.person_outline_rounded,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your first name';
@@ -128,7 +228,6 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                 _buildTextField(
                   controller: _lastNameController,
                   label: 'Last Name',
-                  icon: Icons.person_outline_rounded,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your last name';
@@ -137,27 +236,33 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                   },
                 ),
                 const SizedBox(height: 16),
-                _buildTextField(
-                  controller: _dateOfBirthController,
-                  label: 'Date of Birth',
-                  icon: Icons.calendar_today_outlined,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your date of birth';
-                    }
-                    return null;
-                  },
+                GestureDetector(
+                  onTap: () => _selectDate(context),
+                  child: AbsorbPointer(
+                    child: _buildTextField(
+                      controller: _dateOfBirthController,
+                      label: 'Date of Birth',
+                      suffixIcon: Icons.calendar_today_rounded,
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'Please select your date of birth';
+                        }
+                        return null;
+                      },
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 16),
                 _buildTextField(
                   controller: _emailController,
                   label: 'Email Address',
-                  icon: Icons.email_outlined,
+                  keyboardType: TextInputType.emailAddress,
                   validator: (value) {
                     if (value == null || value.isEmpty) {
                       return 'Please enter your email address';
                     }
-                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$').hasMatch(value)) {
+                    if (!RegExp(r'^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$')
+                        .hasMatch(value)) {
                       return 'Please enter a valid email address';
                     }
                     return null;
@@ -177,7 +282,7 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
                       elevation: 2,
                     ),
                     child: const Text(
-                      'Save & Continue',
+                      'Continue',
                       style: TextStyle(
                         color: Colors.white,
                         fontSize: 18,
@@ -198,37 +303,34 @@ class _BasicInfoPageState extends State<BasicInfoPage> {
   Widget _buildTextField({
     required TextEditingController controller,
     required String label,
-    required IconData icon,
-    required String? Function(String?)? validator,
+    IconData? suffixIcon,
+    TextInputType? keyboardType,
+    String? Function(String?)? validator,
   }) {
-    return TextFormField(
-      controller: controller,
-      style: const TextStyle(color: Colors.white),
-      decoration: InputDecoration(
-        labelText: label,
-        labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
-        prefixIcon: Icon(icon, color: Colors.white.withOpacity(0.7)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withOpacity(0.2)),
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.1),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: Colors.white.withOpacity(0.2),
+          width: 1,
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0xFF2A52C9), width: 2),
-        ),
-        errorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.red.withOpacity(0.5)),
-        ),
-        focusedErrorBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Colors.red),
-        ),
-        filled: true,
-        fillColor: Colors.white.withOpacity(0.1),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
       ),
-      validator: validator,
+      child: TextFormField(
+        controller: controller,
+        style: const TextStyle(color: Colors.white),
+        keyboardType: keyboardType,
+        validator: validator,
+        decoration: InputDecoration(
+          labelText: label,
+          labelStyle: TextStyle(color: Colors.white.withOpacity(0.7)),
+          suffixIcon: suffixIcon != null
+              ? Icon(suffixIcon, color: Colors.white.withOpacity(0.7))
+              : null,
+          border: InputBorder.none,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+        ),
+      ),
     );
   }
 }
