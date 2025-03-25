@@ -6,6 +6,9 @@ import 'package:bus_app/features/user/ask_location.dart';
 import 'package:bus_app/features/shared/role_selection.dart';
 import 'package:bus_app/features/driver/auth/add_information.dart';
 import 'package:app_links/app_links.dart';
+import 'package:provider/provider.dart';
+import 'package:bus_app/providers/settings_provider.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
 
 // Global function to test database connection and permissions
 Future<void> testDatabaseConnection() async {
@@ -175,18 +178,28 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Busway',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        fontFamily: 'Instrument Sans',
+    return ChangeNotifierProvider(
+      create: (context) => SettingsProvider(),
+      child: Consumer<SettingsProvider>(
+        builder: (context, settingsProvider, _) {
+          return MaterialApp(
+            title: 'Busway',
+            debugShowCheckedModeBanner: false,
+            theme: ThemeData(
+              primarySwatch: Colors.blue,
+              fontFamily: 'Instrument Sans',
+            ),
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            locale: Locale(settingsProvider.language),
+            home: _initialScreen,
+            routes: {
+              '/location': (context) => const AskLocationScreen(),
+              '/home': (context) => const HomePage(),
+            },
+          );
+        }
       ),
-      home: _initialScreen,
-      routes: {
-        '/location': (context) => const AskLocationScreen(),
-        '/home': (context) => const HomePage(),
-      },
     );
   }
 }

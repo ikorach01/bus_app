@@ -4,6 +4,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'package:provider/provider.dart';
+import 'package:flutter_gen/gen_l10n/app_localizations.dart';
+import 'package:bus_app/providers/settings_provider.dart';
+import 'package:bus_app/features/user/settings_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -31,69 +35,108 @@ class _HomePageState extends State<HomePage> {
     },
   ];
 
-  // بيانات وهمية للحافلات
   final List<Map<String, dynamic>> _mockBuses = [
     {
       'busNumber': '101',
       'destination': 'Nearby Municipalities Station',
       'currentSpeed': '50 km/h',
-      'busImage': 'assets/images/OIP (4).jpg', // المسار المحلي للصورة
+      'busImage': 'assets/images/OIP (4).jpg',
       'expectedArrivalTime': '10 min',
-      'driverName': 'John Doe', // اسم السائق
-      'finalDestination': 'Central Station', // المحطة النهائية
-      'position': LatLng(27.874, -0.285), // موقع الحافلة على الخريطة
+      'driverName': 'John Doe',
+      'finalDestination': 'Central Station',
+      'position': LatLng(27.874, -0.285),
     },
     {
       'busNumber': '202',
       'destination': 'Distant Municipalities Station',
       'currentSpeed': '45 km/h',
-      'busImage': 'assets/images/OIP (4).jpg', // المسار المحلي للصورة
+      'busImage': 'assets/images/OIP (4).jpg',
       'expectedArrivalTime': '15 min',
-      'driverName': 'Jane Smith', // اسم السائق
-      'finalDestination': 'North Station', // المحطة النهائية
-      'position': LatLng(27.882, -0.281), // موقع الحافلة على الخريطة
+      'driverName': 'Jane Smith',
+      'finalDestination': 'North Station',
+      'position': LatLng(27.882, -0.281),
     },
   ];
 
-  Map<String, dynamic>? _selectedBus; // الحافلة المختارة
-  String? _selectedStationName; // اسم المحطة المختارة
+  Map<String, dynamic>? _selectedBus;
+  String? _selectedStationName;
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
     _getUserLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkForDelays();
+    });
+  }
+
+  Future<void> _checkForDelays() async {
+    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+    if (!settingsProvider.delayAlertsEnabled || !mounted) return;
+
+    final delays = await _fetchDelaysFromServer();
+    
+    if (delays.isNotEmpty && mounted) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text(AppLocalizations.of(context)!.delayAlerts),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: delays.map((delay) => 
+              Text('${delay['busNumber']}: ${delay['delay']} minutes delay')
+            ).toList(),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchDelaysFromServer() async {
+    // محاكاة لجلب البيانات من السيرفر
+    await Future.delayed(const Duration(seconds: 1));
+    return [
+      {'busNumber': '101', 'delay': 5},
+      {'busNumber': '202', 'delay': 10},
+    ];
   }
 
   Future<void> _getUserLocation() async {
     Location location = Location();
     
-    // التحقق من تمكين خدمة الموقع
     bool serviceEnabled = await location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await location.requestService();
       if (!serviceEnabled) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Location service is disabled. Please enable it.")),
+          const SnackBar(content: Text('Location service is disabled')),
         );
         return;
       }
     }
 
-    // التحقق من أذونات الموقع
     PermissionStatus permissionGranted = await location.hasPermission();
     if (permissionGranted == PermissionStatus.denied) {
       permissionGranted = await location.requestPermission();
       if (permissionGranted != PermissionStatus.granted) {
+        if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Location permissions are denied. Please grant them.")),
+          const SnackBar(content: Text('Location permission denied')),
         );
         return;
       }
     }
 
-    // الحصول على الموقع الحالي
     LocationData locationData = await location.getLocation();
+    if (!mounted) return;
     setState(() {
       _currentLocation = locationData;
     });
@@ -106,7 +149,7 @@ class _HomePageState extends State<HomePage> {
   void _updateSelectedStation(Map<String, dynamic> station) {
     setState(() {
       _selectedStation = LatLng(station['lat'], station['lon']);
-      _selectedStationName = station['name']; // تحديث اسم المحطة المختارة
+      _selectedStationName = station['name'];
       _calculateRoute();
     });
   }
@@ -114,41 +157,92 @@ class _HomePageState extends State<HomePage> {
   Future<void> _calculateRoute() async {
     if (_currentLocation == null || _selectedStation == null) return;
 
-    final String apiKey = "0mLFOCbR4d37yR14JI6y1QL3kztkWhKff3tjn95qc8U"; // استبدل بمفتاح API الخاص بك
-    final Uri url = Uri.parse(
-        "https://router.hereapi.com/v8/routes?apikey=$apiKey&transportMode=bus&origin=${_currentLocation!.latitude},${_currentLocation!.longitude}&destination=${_selectedStation!.latitude},${_selectedStation!.longitude}&return=polyline,travelSummary");
+    try {
+      final String apiKey = "0mLFOCbR4d37yR14JI6y1QL3kztkWhKff3tjn95qc8U";
+      final Uri url = Uri.parse(
+          "https://router.hereapi.com/v8/routes?apikey=$apiKey&transportMode=bus&origin=${_currentLocation!.latitude},${_currentLocation!.longitude}&destination=${_selectedStation!.latitude},${_selectedStation!.longitude}&return=polyline,summary");
 
-    final response = await http.get(url);
-    if (response.statusCode == 200) {
-      final data = json.decode(response.body);
-      final route = data['routes'][0];
+      final response = await http.get(url);
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        
+        if (data.containsKey('routes') && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          
+          if (route.containsKey('sections') && route['sections'].isNotEmpty) {
+            final section = route['sections'][0];
+            
+            if (section.containsKey('summary')) {
+              final int estimatedTimeSeconds = section['summary']['duration'] ?? 0;
+              final Duration duration = Duration(seconds: estimatedTimeSeconds);
+              final String estimatedTime =
+                  "${duration.inMinutes} minutes";
+              
+              if (section.containsKey('polyline')) {
+                final polyline = section['polyline'];
+                final decodedPoints = _decodePolyline(polyline);
 
-      // استخراج الوقت المتوقع للسفر
-      final int estimatedTimeSeconds = route['sections'][0]['travelSummary']['duration'];
-      final Duration duration = Duration(seconds: estimatedTimeSeconds);
-      final String estimatedTime =
-          "${duration.inMinutes} min${duration.inMinutes > 1 ? 's' : ''}";
-
-      // استخراج نقاط الخطوط للطريق
-      final polyline = route['sections'][0]['polyline'];
-      final decodedPoints = _decodePolyline(polyline);
-
-      setState(() {
-        _routePoints = decodedPoints;
-        _estimatedTime = estimatedTime;
-      });
+                if (!mounted) return;
+                setState(() {
+                  _routePoints = decodedPoints;
+                  _estimatedTime = estimatedTime;
+                });
+              }
+            }
+          }
+        }
+      } else {
+        // Fallback to mock route if API fails
+        _createMockRoute();
+      }
+    } catch (e) {
+      print("Error calculating route: $e");
+      // Fallback to mock route if API fails
+      _createMockRoute();
     }
   }
 
-  List<LatLng> _decodePolyline(String encoded) {
-    final List<int> bytes = base64.decode(encoded);
-    final List<LatLng> points = [];
-    int lat = 0, lon = 0;
+  void _createMockRoute() {
+    if (_currentLocation == null || _selectedStation == null) return;
+    
+    // Create a simple straight line between current location and selected station
+    final List<LatLng> mockRoute = [
+      LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
+      _selectedStation!,
+    ];
+    
+    setState(() {
+      _routePoints = mockRoute;
+      _estimatedTime = "15 minutes";
+    });
+  }
 
-    for (int i = 0; i < bytes.length; i += 2) {
-      lat += bytes[i];
-      lon += bytes[i + 1];
-      points.add(LatLng(lat / 1e5, lon / 1e5));
+  List<LatLng> _decodePolyline(String encoded) {
+    List<LatLng> points = [];
+    int index = 0, len = encoded.length;
+    int lat = 0, lng = 0;
+
+    while (index < len) {
+      int b, shift = 0, result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlat = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lat += dlat;
+
+      shift = 0;
+      result = 0;
+      do {
+        b = encoded.codeUnitAt(index++) - 63;
+        result |= (b & 0x1f) << shift;
+        shift += 5;
+      } while (b >= 0x20);
+      int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
+      lng += dlng;
+
+      points.add(LatLng(lat / 1e5, lng / 1e5));
     }
     return points;
   }
@@ -157,14 +251,25 @@ class _HomePageState extends State<HomePage> {
     showDialog(
       context: context,
       builder: (context) {
+        // Get the current locale
+        final isArabic = Localizations.localeOf(context).languageCode == 'ar';
+        
+        // Translate strings based on locale
+        final busText = isArabic ? 'حافلة' : 'Bus';
+        final destinationText = isArabic ? 'الوجهة' : 'Destination';
+        final speedText = isArabic ? 'السرعة' : 'Speed';
+        final expectedArrivalText = isArabic ? 'وقت الوصول المتوقع' : 'Expected Arrival';
+        final driverText = isArabic ? 'السائق' : 'Driver';
+        final finalDestinationText = isArabic ? 'الوجهة النهائية' : 'Final Destination';
+        final closeText = isArabic ? 'إغلاق' : 'Close';
+        
         return AlertDialog(
-          title: Text('Bus ${bus['busNumber']}'),
+          title: Text('$busText ${bus['busNumber']}'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // عرض صورة الحافلة
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
                   child: Image.asset(
@@ -175,11 +280,11 @@ class _HomePageState extends State<HomePage> {
                   ),
                 ),
                 const SizedBox(height: 10),
-                Text('Destination: ${bus['destination']}'), // الوجهة
-                Text('Speed: ${bus['currentSpeed']}'), // السرعة الحالية
-                Text('Expected Arrival: ${bus['expectedArrivalTime']}'), // الوقت المتوقع
-                Text('Driver: ${bus['driverName']}'), // اسم السائق
-                Text('Final Destination: ${bus['finalDestination']}'), // المحطة النهائية
+                Text('$destinationText: ${bus['destination']}'),
+                Text('$speedText: ${bus['currentSpeed']}'),
+                Text('$expectedArrivalText: ${bus['expectedArrivalTime']}'),
+                Text('$driverText: ${bus['driverName']}'),
+                Text('$finalDestinationText: ${bus['finalDestination']}'),
               ],
             ),
           ),
@@ -188,7 +293,7 @@ class _HomePageState extends State<HomePage> {
               onPressed: () {
                 Navigator.pop(context);
               },
-              child: const Text('Close'),
+              child: Text(closeText),
             ),
           ],
         );
@@ -198,7 +303,6 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    // تصفية الحافلات بناءً على المحطة المختارة
     final filteredBuses = _mockBuses.where((bus) {
       return bus['destination'] == _selectedStationName || bus['finalDestination'] == _selectedStationName;
     }).toList();
@@ -257,7 +361,6 @@ class _HomePageState extends State<HomePage> {
                       height: 40,
                       child: const Icon(Icons.directions_bus, color: Colors.blue, size: 30),
                     ),
-                  // عرض الحافلات المصفاة على الخريطة
                   for (final bus in filteredBuses)
                     Marker(
                       point: bus['position'],
@@ -287,6 +390,20 @@ class _HomePageState extends State<HomePage> {
             ),
           ),
           Positioned(
+            top: 20,
+            left: 20,
+            child: FloatingActionButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const SettingsPage()),
+                );
+              },
+              backgroundColor: Colors.blue,
+              child: const Icon(Icons.settings, color: Colors.white),
+            ),
+          ),
+          Positioned(
             bottom: 20,
             left: 20,
             right: 20,
@@ -299,9 +416,11 @@ class _HomePageState extends State<HomePage> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Text(
-                    "Select a Station",
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                  Text(
+                    Localizations.localeOf(context).languageCode == 'ar' 
+                        ? 'اختر المحطة' 
+                        : 'Select Station',
+                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                   ),
                   const SizedBox(height: 10),
                   ElevatedButton(
