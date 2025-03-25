@@ -31,8 +31,37 @@ class _AddInformationPageState extends State<AddInformationPage> {
       });
     }
     
+    // Check if driver has already registered
+    _checkDriverRegistration();
+    
     // Load any saved data from SharedPreferences
     _loadSavedData();
+  }
+  
+  Future<void> _checkDriverRegistration() async {
+    try {
+      final user = supabase.auth.currentUser;
+      if (user != null) {
+        // Check if driver record exists
+        final driverData = await supabase
+            .from('drivers')
+            .select('id')
+            .eq('id', user.id)
+            .maybeSingle();
+        
+        // If driver record exists, navigate to HomePage2
+        if (driverData != null) {
+          if (mounted) {
+            Navigator.of(context).pushReplacement(
+              MaterialPageRoute(builder: (context) => const HomePage2()),
+            );
+          }
+        }
+      }
+    } catch (e) {
+      // If there's an error, continue with registration
+      print('Error checking driver registration: $e');
+    }
   }
   
   Future<void> _loadSavedData() async {
