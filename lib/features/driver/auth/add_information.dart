@@ -57,143 +57,237 @@ class _AddInformationPageState extends State<AddInformationPage> {
   }
 
   Future<void> _submitInformation() async {
-    // Validate that all required fields are present
-    if (!_validateDriverData()) {
-      return;
-    }
-
-    // Show loading indicator
+    // Show loading dialog
     showDialog(
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
         return const Center(
-          child: CircularProgressIndicator(),
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
         );
       },
     );
 
     try {
-      // Get current user
+      // Get the current user
       final user = supabase.auth.currentUser;
       if (user == null) {
-        // Close loading dialog
-        Navigator.pop(context);
-        _showErrorMessage('User not authenticated. Please log in again.');
+        Navigator.pop(context); // Close loading dialog
+        _showErrorMessage('You must be logged in to register as a driver.');
         return;
       }
 
-      // Format dates for PostgreSQL
-      String? formattedDob;
-      if (_driverData.containsKey('date_of_birth') && _driverData['date_of_birth'] != null) {
-        try {
-          final parts = _driverData['date_of_birth'].split('/');
-          if (parts.length == 3) {
-            formattedDob = '${parts[2]}-${parts[0]}-${parts[1]}'; // YYYY-MM-DD
+      // Check if we have all required fields
+      bool isComplete = _validateDriverData();
+      
+      // Format dates for database
+      String formattedDob = '';
+      String formattedLicenseExp = '';
+      String formattedGreyCardExp = '';
+      
+      try {
+        if (_driverData.containsKey('date_of_birth') && _driverData['date_of_birth'] != null) {
+          final dobParts = _driverData['date_of_birth'].toString().split('/');
+          if (dobParts.length == 3) {
+            formattedDob = '${dobParts[2]}-${dobParts[0]}-${dobParts[1]}'; // YYYY-MM-DD
           } else {
-            throw Exception('Invalid date format for date of birth');
+            formattedDob = _driverData['date_of_birth'].toString();
           }
-        } catch (e) {
-          // Close loading dialog
-          Navigator.pop(context);
-          _showErrorMessage('Invalid date format for date of birth. Please use MM/DD/YYYY format.');
-          return;
         }
-      } else {
-        // Close loading dialog
-        Navigator.pop(context);
-        _showErrorMessage('Date of birth is missing. Please complete the Basic Information section.');
-        return;
-      }
-
-      String? formattedLicenseExp;
-      if (_driverData.containsKey('license_expiration') && _driverData['license_expiration'] != null) {
-        try {
-          final parts = _driverData['license_expiration'].split('/');
-          if (parts.length == 3) {
-            formattedLicenseExp = '${parts[2]}-${parts[0]}-${parts[1]}'; // YYYY-MM-DD
+        
+        if (_driverData.containsKey('license_expiration') && _driverData['license_expiration'] != null) {
+          final licExpParts = _driverData['license_expiration'].toString().split('/');
+          if (licExpParts.length == 3) {
+            formattedLicenseExp = '${licExpParts[2]}-${licExpParts[0]}-${licExpParts[1]}'; // YYYY-MM-DD
           } else {
-            throw Exception('Invalid date format for license expiration');
+            formattedLicenseExp = _driverData['license_expiration'].toString();
           }
-        } catch (e) {
-          // Close loading dialog
-          Navigator.pop(context);
-          _showErrorMessage('Invalid date format for license expiration. Please use MM/DD/YYYY format.');
-          return;
         }
-      } else {
-        // Close loading dialog
-        Navigator.pop(context);
-        _showErrorMessage('License expiration date is missing. Please complete the Driver License section.');
-        return;
-      }
-
-      String? formattedGreyCardExp;
-      if (_driverData.containsKey('grey_card_expiration') && _driverData['grey_card_expiration'] != null) {
-        try {
-          final parts = _driverData['grey_card_expiration'].split('/');
-          if (parts.length == 3) {
-            formattedGreyCardExp = '${parts[2]}-${parts[0]}-${parts[1]}'; // YYYY-MM-DD
+        
+        if (_driverData.containsKey('grey_card_expiration') && _driverData['grey_card_expiration'] != null) {
+          final greyCardExpParts = _driverData['grey_card_expiration'].toString().split('/');
+          if (greyCardExpParts.length == 3) {
+            formattedGreyCardExp = '${greyCardExpParts[2]}-${greyCardExpParts[0]}-${greyCardExpParts[1]}'; // YYYY-MM-DD
           } else {
-            throw Exception('Invalid date format for grey card expiration');
+            formattedGreyCardExp = _driverData['grey_card_expiration'].toString();
           }
-        } catch (e) {
-          // Close loading dialog
-          Navigator.pop(context);
-          _showErrorMessage('Invalid date format for grey card expiration. Please use MM/DD/YYYY format.');
-          return;
         }
-      } else {
-        // Close loading dialog
-        Navigator.pop(context);
-        _showErrorMessage('Grey card expiration date is missing. Please complete the Grey Card section.');
-        return;
+      } catch (e) {
+        print('Error formatting dates: $e');
+        // Continue with original values if formatting fails
+        formattedDob = _driverData['date_of_birth']?.toString() ?? '';
+        formattedLicenseExp = _driverData['license_expiration']?.toString() ?? '';
+        formattedGreyCardExp = _driverData['grey_card_expiration']?.toString() ?? '';
       }
 
-      // Prepare data for insertion
+      // Prepare data for insertion, including only the fields that exist
       final driverData = {
+        'id': user.id,  // Set the driver ID to the user's authentication ID
         'user_id': user.id,
-        'first_name': _driverData['first_name'],
-        'last_name': _driverData['last_name'],
-        'date_of_birth': formattedDob,
-        'license_number': _driverData['license_number'],
-        'license_image_front': _driverData['license_image_front'],
-        'license_image_back': _driverData['license_image_back'],
-        'license_expiration': formattedLicenseExp,
-        'grey_card_number': _driverData['grey_card_number'],
-        'grey_card_image_front': _driverData['grey_card_image_front'],
-        'grey_card_image_back': _driverData['grey_card_image_back'],
-        'grey_card_expiration': formattedGreyCardExp,
-        'vehicle_registration_plate': _driverData['vehicle_registration_plate'],
-        'email_driver': _driverData['email_driver'],
         'created_at': DateTime.now().toIso8601String(),
       };
-
-      // Insert data into drivers table
-      await supabase.from('drivers').insert(driverData);
       
-      // Clear saved data after successful submission
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.remove('driver_data');
+      // Add fields that exist in _driverData to the driverData map
+      if (_driverData.containsKey('first_name') && _driverData['first_name'] != null) {
+        driverData['first_name'] = _driverData['first_name'].toString();
+      }
+      
+      if (_driverData.containsKey('last_name') && _driverData['last_name'] != null) {
+        driverData['last_name'] = _driverData['last_name'].toString();
+      }
+      
+      if (formattedDob.isNotEmpty) {
+        driverData['date_of_birth'] = formattedDob;
+      }
+      
+      if (_driverData.containsKey('license_number') && _driverData['license_number'] != null) {
+        driverData['license_number'] = _driverData['license_number'].toString();
+      }
+      
+      if (_driverData.containsKey('license_image_front') && _driverData['license_image_front'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
+        if (_driverData['license_image_front'] is List) {
+          // Convert to base64 string if it's a list of bytes
+          driverData['license_image_front'] = base64Encode(List<int>.from(_driverData['license_image_front']));
+        } else {
+          driverData['license_image_front'] = _driverData['license_image_front'].toString();
+        }
+      }
+      
+      if (_driverData.containsKey('license_image_back') && _driverData['license_image_back'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
+        if (_driverData['license_image_back'] is List) {
+          // Convert to base64 string if it's a list of bytes
+          driverData['license_image_back'] = base64Encode(List<int>.from(_driverData['license_image_back']));
+        } else {
+          driverData['license_image_back'] = _driverData['license_image_back'].toString();
+        }
+      }
+      
+      if (formattedLicenseExp.isNotEmpty) {
+        driverData['license_expiration'] = formattedLicenseExp;
+      }
+      
+      if (_driverData.containsKey('grey_card_number') && _driverData['grey_card_number'] != null) {
+        driverData['grey_card_number'] = _driverData['grey_card_number'].toString();
+      }
+      
+      if (_driverData.containsKey('grey_card_image_front') && _driverData['grey_card_image_front'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
+        if (_driverData['grey_card_image_front'] is List) {
+          // Convert to base64 string if it's a list of bytes
+          driverData['grey_card_image_front'] = base64Encode(List<int>.from(_driverData['grey_card_image_front']));
+        } else {
+          driverData['grey_card_image_front'] = _driverData['grey_card_image_front'].toString();
+        }
+      }
+      
+      if (_driverData.containsKey('grey_card_image_back') && _driverData['grey_card_image_back'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
+        if (_driverData['grey_card_image_back'] is List) {
+          // Convert to base64 string if it's a list of bytes
+          driverData['grey_card_image_back'] = base64Encode(List<int>.from(_driverData['grey_card_image_back']));
+        } else {
+          driverData['grey_card_image_back'] = _driverData['grey_card_image_back'].toString();
+        }
+      }
+      
+      if (formattedGreyCardExp.isNotEmpty) {
+        driverData['grey_card_expiration'] = formattedGreyCardExp;
+      }
+      
+      if (_driverData.containsKey('vehicle_registration_plate') && _driverData['vehicle_registration_plate'] != null) {
+        driverData['vehicle_registration_plate'] = _driverData['vehicle_registration_plate'].toString();
+      }
+      
+      if (_driverData.containsKey('bus_name') && _driverData['bus_name'] != null) {
+        driverData['bus_name'] = _driverData['bus_name'].toString();
+      }
+      
+      if (_driverData.containsKey('bus_image') && _driverData['bus_image'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
+        if (_driverData['bus_image'] is List) {
+          // Convert to base64 string for database
+          driverData['bus_photo'] = base64Encode(List<int>.from(_driverData['bus_image']));
+        } else {
+          driverData['bus_photo'] = _driverData['bus_image'].toString();
+        }
+      } else if (_driverData.containsKey('bus_photo') && _driverData['bus_photo'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
+        if (_driverData['bus_photo'] is List) {
+          // Convert to base64 string for database
+          driverData['bus_photo'] = base64Encode(List<int>.from(_driverData['bus_photo']));
+        } else {
+          driverData['bus_photo'] = _driverData['bus_photo'].toString();
+        }
+      }
+      
+      if (_driverData.containsKey('email_driver') && _driverData['email_driver'] != null) {
+        driverData['email_driver'] = _driverData['email_driver'].toString();
+      }
 
-      // Close loading dialog
-      Navigator.pop(context);
+      // Insert data into drivers table using the authenticated user's context
+      try {
+        await supabase.from('drivers').insert(driverData);
+        
+        // Clear saved data after successful submission
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('driver_data');
 
-      // Show success message and navigate to home
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Registration completed successfully!'),
-          backgroundColor: Colors.green,
-        ),
-      );
+        // Close loading dialog
+        Navigator.pop(context);
 
-      // Navigate to driver home page
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => const HomePage2(),
-        ),
-      );
+        // Show appropriate message based on whether all fields were valid
+        if (isComplete) {
+          // Show success message and navigate to home
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Registration completed successfully!'),
+              backgroundColor: Colors.green,
+              duration: Duration(seconds: 5),
+            ),
+          );
+
+          // Navigate to driver home page
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => const HomePage2(),
+            ),
+          );
+        } else {
+          // Show partial success message
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Information saved with warnings. Some fields are missing or invalid.'),
+              backgroundColor: Colors.orange,
+              duration: Duration(seconds: 5),
+            ),
+          );
+        }
+      } catch (e) {
+        // Close loading dialog
+        Navigator.pop(context);
+        
+        // Determine the specific error
+        String errorMessage = 'An error occurred during registration.';
+        
+        if (e.toString().contains('duplicate key')) {
+          errorMessage = 'A driver with this information already exists.';
+        } else if (e.toString().contains('violates foreign key constraint')) {
+          errorMessage = 'Invalid reference to another table. Please check your data.';
+        } else if (e.toString().contains('violates not-null constraint')) {
+          errorMessage = 'Missing required information. Please complete all sections.';
+        } else if (e.toString().contains('permission denied')) {
+          errorMessage = 'You do not have permission to register as a driver.';
+        } else if (e.toString().contains('network')) {
+          errorMessage = 'Network error. Please check your internet connection.';
+        }
+        
+        _showErrorMessage('$errorMessage\n\nDetails: ${e.toString()}');
+      }
     } catch (e) {
       // Close loading dialog
       Navigator.pop(context);
@@ -240,13 +334,21 @@ class _AddInformationPageState extends State<AddInformationPage> {
       'first_name', 'last_name', 'date_of_birth',
       'license_number', 'license_image_front', 'license_image_back', 'license_expiration',
       'grey_card_number', 'grey_card_image_front', 'grey_card_image_back', 'grey_card_expiration',
-      'vehicle_registration_plate', 'email_driver'
+      'vehicle_registration_plate', 'bus_photo', 'email_driver', 'bus_name'
     ];
     
     for (final field in requiredFields) {
       if (!_driverData.containsKey(field) || 
           _driverData[field] == null || 
           _driverData[field].toString().isEmpty) {
+        
+        // Show specific error message about which field is missing
+        String fieldName = field.replaceAll('_', ' ');
+        fieldName = fieldName.split(' ').map((word) => 
+          word.isNotEmpty ? word[0].toUpperCase() + word.substring(1) : word
+        ).join(' ');
+        
+        _showErrorMessage('Missing required field: $fieldName. Please complete all sections.');
         return false;
       }
     }

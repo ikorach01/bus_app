@@ -87,7 +87,7 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
     final Map<String, dynamic> dataToSave = Map.from(_driverData);
     
     // Remove binary data as it can't be stored in SharedPreferences
-    dataToSave.remove('bus_image');
+    dataToSave.remove('bus_photo');
     dataToSave.remove('grey_card_image_front');
     dataToSave.remove('grey_card_image_back');
     dataToSave.remove('license_image_front');
@@ -105,7 +105,7 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
       
       // Read the image as bytes and store in driverData
       final bytes = await _busImage!.readAsBytes();
-      _driverData['bus_image'] = bytes;
+      _driverData['bus_photo'] = bytes;
       
       // Save data after picking image
       _saveData();
