@@ -3,6 +3,17 @@ import 'package:intl/intl.dart';
 
 class AppLocalizations {
   static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
+  
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
+    delegate,
+    // Add other delegates if needed
+  ];
+  
+  static const List<Locale> supportedLocales = <Locale>[
+    Locale('en'),
+    Locale('fr'),
+    Locale('ar'),
+  ];
 
   static AppLocalizations? of(BuildContext context) {
     return Localizations.of<AppLocalizations>(context, AppLocalizations);
@@ -21,6 +32,10 @@ class AppLocalizations {
   String get delete => Intl.message('Delete', name: 'delete');
   String get enabled => Intl.message('enabled', name: 'enabled');
   String get disabled => Intl.message('disabled', name: 'disabled');
+  String get logoutFailed => Intl.message('Logout failed', name: 'logoutFailed');
+  String get deleteAccountFailed => Intl.message('Delete account failed', name: 'deleteAccountFailed');
+  String get minutes => Intl.message('minutes', name: 'minutes');
+  String get minutesDelay => Intl.message('minutes delay', name: 'minutesDelay');
   
   // Home page translations
   String get bus => Intl.message('Bus', name: 'bus');
