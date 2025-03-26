@@ -352,14 +352,22 @@ class _HomePageState extends State<HomePage> {
                       point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
                       width: 40,
                       height: 40,
-                      child: const Icon(Icons.my_location, color: Colors.green, size: 30),
+                      child: Image.asset(
+                        'assets/images/location_icon.png',
+                        width: 40,
+                        height: 40,
+                      ),
                     ),
                   if (_selectedStation != null)
                     Marker(
                       point: _selectedStation!,
                       width: 40,
                       height: 40,
-                      child: const Icon(Icons.directions_bus, color: Colors.blue, size: 30),
+                      child: Image.asset(
+                        'assets/images/station_icon.png',
+                        width: 40,
+                        height: 40,
+                      ),
                     ),
                   for (final bus in filteredBuses)
                     Marker(
@@ -373,7 +381,11 @@ class _HomePageState extends State<HomePage> {
                           });
                           _showBusDetails(bus);
                         },
-                        child: const Icon(Icons.directions_bus, color: Colors.red, size: 30),
+                        child: Image.asset(
+                          'assets/images/bus_icon.png',
+                          width: 40,
+                          height: 40,
+                        ),
                       ),
                     ),
                 ],
