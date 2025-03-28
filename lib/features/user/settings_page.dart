@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:bus_app/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:bus_app/features/user/login_page.dart';
@@ -30,20 +29,19 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   Widget build(BuildContext context) {
     final settingsProvider = Provider.of<SettingsProvider>(context);
-    final localizations = AppLocalizations.of(context)!;
-
+    
     return Scaffold(
       appBar: AppBar(
-        title: Text(localizations.settings),
+        title: Text('Settings'),
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
           // قسم الإشعارات
-          _buildSectionHeader(localizations.notifications),
+          _buildSectionHeader('Notifications'),
           SwitchListTile(
-            title: Text(localizations.delayAlerts),
+            title: Text('Delay Alerts'),
             value: _delayAlertsEnabled,
             onChanged: (value) async {
               setState(() => _delayAlertsEnabled = value);
@@ -53,9 +51,9 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
 
           // قسم اللغة
-          _buildSectionHeader(localizations.language),
+          _buildSectionHeader('Language'),
           ListTile(
-            title: Text(localizations.language),
+            title: Text('Language'),
             trailing: DropdownButton<String>(
               value: _selectedLanguage,
               items: [
@@ -83,16 +81,16 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
 
           // قسم الحساب
-          _buildSectionHeader(localizations.account),
+          _buildSectionHeader('Account'),
           ListTile(
             leading: const Icon(Icons.exit_to_app),
-            title: Text(localizations.logout),
+            title: Text('Logout'),
             onTap: () => _logout(context),
           ),
           ListTile(
             leading: const Icon(Icons.delete, color: Colors.red),
             title: Text(
-              localizations.deleteAccount,
+              'Delete Account',
               style: const TextStyle(color: Colors.red),
             ),
             onTap: () => _showDeleteAccountDialog(context),
@@ -120,8 +118,8 @@ class _SettingsPageState extends State<SettingsPage> {
       SnackBar(
         content: Text(
           enabled 
-            ? '${AppLocalizations.of(context)!.delayAlerts} ${AppLocalizations.of(context)!.enabled}'
-            : '${AppLocalizations.of(context)!.delayAlerts} ${AppLocalizations.of(context)!.disabled}',
+            ? 'Delay Alerts enabled'
+            : 'Delay Alerts disabled',
         ),
         duration: const Duration(seconds: 2),
       ),
@@ -169,23 +167,21 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${AppLocalizations.of(context)!.logoutFailed}: ${e.toString()}')),
+        SnackBar(content: Text('Logout failed: ${e.toString()}')),
       );
     }
   }
 
   Future<void> _showDeleteAccountDialog(BuildContext context) async {
-    final localizations = AppLocalizations.of(context)!;
-    
     return showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(localizations.confirmDelete),
-        content: Text(localizations.deleteAccountWarning),
+        title: Text('Confirm Deletion'),
+        content: Text('Are you sure you want to delete your account? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text(localizations.cancel),
+            child: Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
@@ -193,7 +189,7 @@ class _SettingsPageState extends State<SettingsPage> {
               await _deleteAccount(context);
             },
             child: Text(
-              localizations.delete,
+              'Delete',
               style: const TextStyle(color: Colors.red),
             ),
           ),
@@ -203,8 +199,6 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _deleteAccount(BuildContext context) async {
-    final localizations = AppLocalizations.of(context)!;
-    
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
@@ -232,7 +226,7 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('${localizations.deleteAccountFailed}: ${e.toString()}')),
+        SnackBar(content: Text('Delete account failed: ${e.toString()}')),
       );
     }
   }

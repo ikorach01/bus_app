@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'change_languages.dart';
 import 'profile.dart';
-import 'package:bus_app/features/shared/welcome_page.dart';
+import 'package:bus_app/features/user/login_page.dart';
 
 class Settings2Page extends StatelessWidget {
   const Settings2Page({Key? key}) : super(key: key);
@@ -80,7 +80,7 @@ class Settings2Page extends StatelessWidget {
                     if (context.mounted) {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => const WelcomePage()),
+                        MaterialPageRoute(builder: (context) => const LoginPage()),
                       );
                     }
                   }

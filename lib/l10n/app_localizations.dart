@@ -4,18 +4,17 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 
 class AppLocalizations {
   static const LocalizationsDelegate<AppLocalizations> delegate = _AppLocalizationsDelegate();
-  
-  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = <LocalizationsDelegate<dynamic>>[
+
+  static const List<LocalizationsDelegate<dynamic>> localizationsDelegates = [
     delegate,
     GlobalMaterialLocalizations.delegate,
     GlobalWidgetsLocalizations.delegate,
     GlobalCupertinoLocalizations.delegate,
   ];
-  
-  static const List<Locale> supportedLocales = <Locale>[
-    Locale('en'),
-    Locale('fr'),
-    Locale('ar'),
+
+  static const List<Locale> supportedLocales = [
+    Locale('en', ''), // English
+    Locale('ar', ''), // Arabic
   ];
 
   static AppLocalizations? of(BuildContext context) {
@@ -37,8 +36,6 @@ class AppLocalizations {
   String get disabled => Intl.message('disabled', name: 'disabled');
   String get logoutFailed => Intl.message('Logout failed', name: 'logoutFailed');
   String get deleteAccountFailed => Intl.message('Delete account failed', name: 'deleteAccountFailed');
-  String get minutes => Intl.message('minutes', name: 'minutes');
-  String get minutesDelay => Intl.message('minutes delay', name: 'minutesDelay');
   
   // Home page translations
   String get bus => Intl.message('Bus', name: 'bus');
@@ -49,6 +46,8 @@ class AppLocalizations {
   String get finalDestination => Intl.message('Final Destination', name: 'finalDestination');
   String get close => Intl.message('Close', name: 'close');
   String get selectStation => Intl.message('Select Station', name: 'selectStation');
+  String get minutes => Intl.message('minutes', name: 'minutes');
+  String get minutesDelay => Intl.message('minutes delay', name: 'minutesDelay');
 }
 
 class _AppLocalizationsDelegate extends LocalizationsDelegate<AppLocalizations> {

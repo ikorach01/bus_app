@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:bus_app/features/shared/welcome_page.dart';
 import 'package:bus_app/features/user/user_home/home_page.dart';
 import 'package:bus_app/features/user/ask_location.dart';
-import 'package:bus_app/features/shared/welcome_page.dart';
+import 'package:bus_app/features/shared/role_selection.dart';
+import 'package:bus_app/features/driver/auth/add_information.dart';
+import 'package:bus_app/features/driver/driver_home/home_page2.dart';
+import 'package:bus_app/features/user/login_page.dart';
 import 'package:app_links/app_links.dart';
-import 'package:provider/provider.dart';
-import 'package:bus_app/providers/settings_provider.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:bus_app/l10n/app_localizations.dart';
 
 // Global function to test database connection and permissions
@@ -137,8 +140,47 @@ class _MyAppState extends State<MyApp> {
   }
 
   Future<void> _determineInitialScreen() async {
-    // Always show the welcome page when the app starts
-    _setInitialScreen(const WelcomePage());
+    final user = Supabase.instance.client.auth.currentUser;
+
+    if (user != null) {
+      await Supabase.instance.client.auth.refreshSession();
+      if (user.emailConfirmedAt != null) {
+        final userData = user.userMetadata;
+        final role = userData?['role'] as String?;
+
+        if (role == null) {
+          _setInitialScreen(RoleSelectionPage(
+            userId: user.id,
+            userEmail: user.email ?? '',
+            userPhone: userData?['phone'] as String? ?? '',
+          ));
+        } else {
+          if (role == 'driver') {
+            // Check if driver has already completed registration
+            try {
+              // Just check if the driver record exists, we don't need to use the data
+              await Supabase.instance.client
+                  .from('drivers')
+                  .select('id') // Only select the ID field to minimize data transfer
+                  .eq('id', user.id)
+                  .single();
+              
+              // If we get here, the driver exists in the database
+              _setInitialScreen(const HomePage2());
+            } catch (e) {
+              // If driver doesn't exist in database, show registration page
+              _setInitialScreen(const AddInformationPage());
+            }
+          } else if (role == 'passenger') {
+            _setInitialScreen(const AskLocationScreen());
+          }
+        }
+      } else {
+        _setInitialScreen(const WelcomePage());
+      }
+    } else {
+      _setInitialScreen(const LoginPage());
+    }
   }
 
   void _setInitialScreen(Widget screen) {
@@ -151,28 +193,28 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (context) => SettingsProvider(),
-      child: Consumer<SettingsProvider>(
-        builder: (context, settingsProvider, _) {
-          return MaterialApp(
-            title: 'Busway',
-            debugShowCheckedModeBanner: false,
-            theme: ThemeData(
-              primarySwatch: Colors.blue,
-              fontFamily: 'Instrument Sans',
-            ),
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            locale: Locale(settingsProvider.language),
-            home: _initialScreen,
-            routes: {
-              '/location': (context) => const AskLocationScreen(),
-              '/home': (context) => const HomePage(),
-            },
-          );
-        }
+    return MaterialApp(
+      title: 'Busway',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        fontFamily: 'Instrument Sans',
       ),
+      localizationsDelegates: [
+        AppLocalizations.delegate,
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: [
+        const Locale('en', ''), // English, no country code
+        const Locale('ar', ''), // Arabic, no country code
+      ],
+      home: _initialScreen,
+      routes: {
+        '/location': (context) => const AskLocationScreen(),
+        '/home': (context) => const HomePage(),
+      },
     );
   }
 }
