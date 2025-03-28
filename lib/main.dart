@@ -10,6 +10,8 @@ import 'package:bus_app/features/user/login_page.dart';
 import 'package:app_links/app_links.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:bus_app/l10n/app_localizations.dart';
+import 'package:provider/provider.dart';
+import 'package:bus_app/providers/settings_provider.dart';
 
 // Global function to test database connection and permissions
 Future<void> testDatabaseConnection() async {
@@ -90,7 +92,12 @@ void main() async {
   // Run database tests
   await testDatabaseConnection();
 
-  runApp(const MyApp());
+  runApp(
+    ChangeNotifierProvider(
+      create: (context) => SettingsProvider(),
+      child: const MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
@@ -193,28 +200,34 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Busway',
-      debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-        fontFamily: 'Instrument Sans',
-      ),
-      localizationsDelegates: [
-        AppLocalizations.delegate,
-        GlobalMaterialLocalizations.delegate,
-        GlobalWidgetsLocalizations.delegate,
-        GlobalCupertinoLocalizations.delegate,
-      ],
-      supportedLocales: [
-        const Locale('en', ''), // English, no country code
-        const Locale('ar', ''), // Arabic, no country code
-      ],
-      home: _initialScreen,
-      routes: {
-        '/location': (context) => const AskLocationScreen(),
-        '/home': (context) => const HomePage(),
-      },
+    return Consumer<SettingsProvider>(
+      builder: (context, settingsProvider, _) {
+        return MaterialApp(
+          title: 'Busway',
+          debugShowCheckedModeBanner: false,
+          theme: ThemeData(
+            primarySwatch: Colors.blue,
+            fontFamily: 'Instrument Sans',
+            brightness: settingsProvider.darkMode ? Brightness.dark : Brightness.light,
+          ),
+          localizationsDelegates: [
+            AppLocalizations.delegate,
+            GlobalMaterialLocalizations.delegate,
+            GlobalWidgetsLocalizations.delegate,
+            GlobalCupertinoLocalizations.delegate,
+          ],
+          supportedLocales: [
+            const Locale('en', ''), // English, no country code
+            const Locale('ar', ''), // Arabic, no country code
+          ],
+          locale: Locale(settingsProvider.language, ''),
+          home: _initialScreen,
+          routes: {
+            '/location': (context) => const AskLocationScreen(),
+            '/home': (context) => const HomePage(),
+          },
+        );
+      }
     );
   }
 }

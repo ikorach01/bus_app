@@ -18,9 +18,10 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   LocationData? _currentLocation;
   LatLng? _selectedStation;
-  List<LatLng> _routePoints = [];
   String _estimatedTime = "N/A";
   late MapController _mapController;
+  List<LatLng> _routePoints = [];
+  bool _mapReady = false;
   final List<Map<String, dynamic>> _stations = [
     {
       'name': 'Nearby Municipalities Station',
@@ -114,39 +115,81 @@ class _HomePageState extends State<HomePage> {
   Future<void> _getUserLocation() async {
     Location location = Location();
     
-    bool serviceEnabled = await location.serviceEnabled();
-    if (!serviceEnabled) {
-      serviceEnabled = await location.requestService();
+    try {
+      bool serviceEnabled = await location.serviceEnabled();
       if (!serviceEnabled) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location service is disabled')),
-        );
-        return;
+        serviceEnabled = await location.requestService();
+        if (!serviceEnabled) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location service is disabled')),
+          );
+          // Set default location if service is not available
+          setState(() {
+            _mapReady = true;
+          });
+          return;
+        }
       }
-    }
 
-    PermissionStatus permissionGranted = await location.hasPermission();
-    if (permissionGranted == PermissionStatus.denied) {
-      permissionGranted = await location.requestPermission();
-      if (permissionGranted != PermissionStatus.granted) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Location permission denied')),
-        );
-        return;
+      // Special handling for web platform
+      try {
+        PermissionStatus permissionGranted = await location.hasPermission();
+        if (permissionGranted == PermissionStatus.denied) {
+          permissionGranted = await location.requestPermission();
+          if (permissionGranted != PermissionStatus.granted) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Location permission denied')),
+            );
+            // Set default location if permission is denied
+            setState(() {
+              _mapReady = true;
+            });
+            return;
+          }
+        }
+      } catch (e) {
+        print("Error with location permissions: $e");
+        // Continue with default location on web platforms where permissions might not work
+        setState(() {
+          _mapReady = true;
+        });
       }
-    }
 
-    LocationData locationData = await location.getLocation();
-    if (!mounted) return;
-    setState(() {
-      _currentLocation = locationData;
-    });
-    _mapController.move(
-      LatLng(locationData.latitude!, locationData.longitude!),
-      14.0,
-    );
+      try {
+        LocationData locationData = await location.getLocation();
+        if (!mounted) return;
+        setState(() {
+          _currentLocation = locationData;
+          _mapReady = true;
+        });
+        
+        // Only move the map if we have valid coordinates
+        if (locationData.latitude != null && locationData.longitude != null) {
+          try {
+            _mapController.move(
+              LatLng(locationData.latitude!, locationData.longitude!),
+              14.0,
+            );
+          } catch (e) {
+            print("Error moving map: $e");
+          }
+        }
+      } catch (e) {
+        print("Error getting location: $e");
+        // Set map as ready even if location failed
+        setState(() {
+          _mapReady = true;
+        });
+      }
+    } catch (e) {
+      print("General location error: $e");
+      // Set map as ready even if there was an error
+      setState(() {
+        _mapReady = true;
+      });
+    }
   }
 
   void _updateSelectedStation(Map<String, dynamic> station) {
@@ -161,7 +204,10 @@ class _HomePageState extends State<HomePage> {
     if (_currentLocation == null || _selectedStation == null) return;
 
     try {
-      final String apiKey = "0mLFOCbR4d37yR14JI6y1QL3kztkWhKff3tjn95qc8U";
+      // Get API key from settings provider for better security
+      final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+      final String apiKey = settingsProvider.hereApiKey;
+
       final Uri url = Uri.parse(
           "https://router.hereapi.com/v8/routes?apikey=$apiKey&transportMode=bus&origin=${_currentLocation!.latitude},${_currentLocation!.longitude}&destination=${_selectedStation!.latitude},${_selectedStation!.longitude}&return=polyline,summary");
 
@@ -209,14 +255,14 @@ class _HomePageState extends State<HomePage> {
     if (_currentLocation == null || _selectedStation == null) return;
     
     // Create a simple straight line between current location and selected station
-    final List<LatLng> mockRoute = [
+    List<LatLng> mockRoute = [
       LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
       _selectedStation!,
     ];
     
     setState(() {
       _routePoints = mockRoute;
-      _estimatedTime = "15 minutes";
+      _estimatedTime = "10 minutes (estimated)";
     });
   }
 
@@ -245,7 +291,9 @@ class _HomePageState extends State<HomePage> {
       int dlng = ((result & 1) != 0 ? ~(result >> 1) : (result >> 1));
       lng += dlng;
 
-      points.add(LatLng(lat / 1e5, lng / 1e5));
+      double latitude = lat / 1E5;
+      double longitude = lng / 1E5;
+      points.add(LatLng(latitude, longitude));
     }
     return points;
   }
@@ -306,6 +354,7 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Filter buses based on selected station
     final filteredBuses = _mockBuses.where((bus) {
       return bus['destination'] == _selectedStationName || bus['finalDestination'] == _selectedStationName;
     }).toList();
@@ -313,80 +362,94 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Stack(
         children: [
-          FlutterMap(
-            mapController: _mapController,
-            options: MapOptions(
-              initialCenter: _currentLocation != null
+          // Only show map if it's ready
+          if (_mapReady || _currentLocation != null)
+            FlutterMap(
+              mapController: _mapController,
+              options: MapOptions(
+                initialCenter: _currentLocation != null 
                   ? LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)
-                  : LatLng(27.87374386370353, -0.28424559734165983),
-              initialZoom: 14.0,
-            ),
-            children: [
-              TileLayer(
-                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.bus_app',
+                  : const LatLng(27.87374386370353, -0.28424559734165983), // Default center if location not available
+                initialZoom: 14.0,
+                onMapReady: () {
+                  setState(() {
+                    _mapReady = true;
+                  });
+                },
               ),
-              if (_routePoints.isNotEmpty)
-                PolylineLayer(
-                  polylines: [
-                    Polyline(
-                      points: _routePoints,
-                      strokeWidth: 5.0,
-                      color: Colors.red,
-                    ),
-                  ],
+              children: [
+                TileLayer(
+                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  userAgentPackageName: 'com.example.bus_app',
                 ),
-              if (_currentLocation != null)
-                CircleLayer(
-                  circles: [
-                    CircleMarker(
-                      point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
-                      color: Colors.blue.withOpacity(0.3),
-                      borderColor: Colors.blue,
-                      borderStrokeWidth: 2.0,
-                      radius: 10.0,
-                    ),
-                  ],
-                ),
-              MarkerLayer(
-                markers: [
-                  if (_currentLocation != null)
-                    Marker(
-                      point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
-                      width: 40,
-                      height: 40,
-                      child: const Icon(Icons.my_location, color: Colors.green, size: 30),
-                    ),
-                  if (_selectedStation != null)
-                    Marker(
-                      point: _selectedStation!,
-                      width: 40,
-                      height: 40,
-                      child: const Icon(Icons.directions_bus, color: Colors.blue, size: 30),
-                    ),
-                  for (final bus in filteredBuses)
-                    Marker(
-                      point: bus['position'],
-                      width: 40,
-                      height: 40,
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedBus = bus;
-                          });
-                          _showBusDetails(bus);
-                        },
-                        child: const Icon(Icons.directions_bus, color: Colors.red, size: 30),
+                MarkerLayer(
+                  markers: [
+                    if (_currentLocation != null)
+                      Marker(
+                        point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
+                        width: 80,
+                        height: 80,
+                        child: const Icon(
+                          Icons.location_on,
+                          color: Colors.blue,
+                          size: 40,
+                        ),
+                      ),
+                    ..._stations.map(
+                      (station) => Marker(
+                        point: LatLng(station['lat'], station['lon']),
+                        width: 80,
+                        height: 80,
+                        child: GestureDetector(
+                          onTap: () => _updateSelectedStation(station),
+                          child: const Icon(
+                            Icons.location_on,
+                            color: Colors.red,
+                            size: 40,
+                          ),
+                        ),
                       ),
                     ),
-                ],
-              ),
-            ],
-          ),
+                    // Use filteredBuses instead of _mockBuses to show only relevant buses
+                    ...filteredBuses.map(
+                      (bus) => Marker(
+                        point: bus['position'],
+                        width: 80,
+                        height: 80,
+                        child: GestureDetector(
+                          onTap: () => _showBusDetails(bus),
+                          child: const Icon(
+                            Icons.directions_bus,
+                            color: Colors.green,
+                            size: 40,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                if (_routePoints.isNotEmpty && _routePoints.length >= 2)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _routePoints,
+                        color: Colors.blue,
+                        strokeWidth: 4,
+                      ),
+                    ],
+                  ),
+              ],
+            )
+          else
+            // Show loading indicator if map is not ready
+            const Center(
+              child: CircularProgressIndicator(),
+            ),
           Positioned(
             top: 20,
             right: 20,
             child: FloatingActionButton(
+              heroTag: 'homePageFAB',
               onPressed: _getUserLocation,
               backgroundColor: Colors.blue,
               child: const Icon(Icons.my_location, color: Colors.white),
@@ -396,6 +459,7 @@ class _HomePageState extends State<HomePage> {
             top: 20,
             left: 20,
             child: FloatingActionButton(
+              heroTag: 'settingsPageFAB',
               onPressed: () {
                 try {
                   // Try to get the SettingsProvider from the current context
