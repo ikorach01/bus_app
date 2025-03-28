@@ -40,7 +40,7 @@ class _HomePageState extends State<HomePage> {
       'busNumber': '101',
       'destination': 'Nearby Municipalities Station',
       'currentSpeed': '50 km/h',
-      'busImage': 'assets/images/OIP (4).jpg',
+      'busImage': 'assets/images/busd.png',
       'expectedArrivalTime': '10 min',
       'driverName': 'John Doe',
       'finalDestination': 'Central Station',
@@ -50,7 +50,7 @@ class _HomePageState extends State<HomePage> {
       'busNumber': '202',
       'destination': 'Distant Municipalities Station',
       'currentSpeed': '45 km/h',
-      'busImage': 'assets/images/OIP (4).jpg',
+      'busImage': 'assets/images/busd.png',
       'expectedArrivalTime': '15 min',
       'driverName': 'Jane Smith',
       'finalDestination': 'North Station',
@@ -60,6 +60,34 @@ class _HomePageState extends State<HomePage> {
 
   Map<String, dynamic>? _selectedBus;
   String? _selectedStationName;
+
+  // Helper method to validate coordinates
+  LatLng _validateCoordinates(double? lat, double? lng) {
+    // Default coordinates for Adrar, Algeria if invalid
+    const double defaultLat = 27.87374386370353;
+    const double defaultLng = -0.28424559734165983;
+    
+    // Check if values are null
+    if (lat == null || lng == null) {
+      return const LatLng(defaultLat, defaultLng);
+    }
+    
+    // Validate latitude (must be between -90 and 90)
+    double validLat = lat;
+    if (lat < -90 || lat > 90) {
+      print('Invalid latitude value: $lat, using default');
+      validLat = defaultLat;
+    }
+    
+    // Validate longitude (must be between -180 and 180)
+    double validLng = lng;
+    if (lng < -180 || lng > 180) {
+      print('Invalid longitude value: $lng, using default');
+      validLng = defaultLng;
+    }
+    
+    return LatLng(validLat, validLng);
+  }
 
   @override
   void initState() {
@@ -169,7 +197,7 @@ class _HomePageState extends State<HomePage> {
         if (locationData.latitude != null && locationData.longitude != null) {
           try {
             _mapController.move(
-              LatLng(locationData.latitude!, locationData.longitude!),
+              _validateCoordinates(locationData.latitude, locationData.longitude),
               14.0,
             );
           } catch (e) {
@@ -196,7 +224,6 @@ class _HomePageState extends State<HomePage> {
     setState(() {
       _selectedStation = LatLng(station['lat'], station['lon']);
       _selectedStationName = station['name'];
-      _calculateRoute();
     });
   }
 
@@ -256,8 +283,8 @@ class _HomePageState extends State<HomePage> {
     
     // Create a simple straight line between current location and selected station
     List<LatLng> mockRoute = [
-      LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
-      _selectedStation!,
+      _validateCoordinates(_currentLocation!.latitude, _currentLocation!.longitude),
+      _validateCoordinates(_selectedStation!.latitude, _selectedStation!.longitude),
     ];
     
     setState(() {
@@ -328,6 +355,25 @@ class _HomePageState extends State<HomePage> {
                     height: 150,
                     width: double.infinity,
                     fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      print('Error loading image: $error');
+                      return Container(
+                        height: 150,
+                        width: double.infinity,
+                        color: Colors.grey[300],
+                        child: Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.directions_bus, size: 50, color: Colors.grey[600]),
+                              const SizedBox(height: 8),
+                              Text(isArabic ? 'لا يمكن تحميل الصورة' : 'Image not available',
+                                  style: TextStyle(color: Colors.grey[600])),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -368,7 +414,7 @@ class _HomePageState extends State<HomePage> {
               mapController: _mapController,
               options: MapOptions(
                 initialCenter: _currentLocation != null 
-                  ? LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)
+                  ? _validateCoordinates(_currentLocation!.latitude, _currentLocation!.longitude)
                   : const LatLng(27.87374386370353, -0.28424559734165983), // Default center if location not available
                 initialZoom: 14.0,
                 onMapReady: () {
@@ -386,26 +432,34 @@ class _HomePageState extends State<HomePage> {
                   markers: [
                     if (_currentLocation != null)
                       Marker(
-                        point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
-                        width: 80,
-                        height: 80,
-                        child: const Icon(
-                          Icons.location_on,
-                          color: Colors.blue,
-                          size: 40,
+                        point: _validateCoordinates(_currentLocation!.latitude, _currentLocation!.longitude),
+                        width: 40,
+                        height: 40,
+                        child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: Image.asset(
+                            'assets/images/user_location.png',
+                            width: 20,
+                            height: 20,
+                          ),
                         ),
                       ),
                     ..._stations.map(
                       (station) => Marker(
-                        point: LatLng(station['lat'], station['lon']),
-                        width: 80,
-                        height: 80,
+                        point: _validateCoordinates(station['lat'], station['lon']),
+                        width: 40,
+                        height: 40,
                         child: GestureDetector(
                           onTap: () => _updateSelectedStation(station),
-                          child: const Icon(
-                            Icons.location_on,
-                            color: Colors.red,
-                            size: 40,
+                          child: SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: Image.asset(
+                              'assets/images/station_icon.png',
+                              width: 20,
+                              height: 20,
+                            ),
                           ),
                         ),
                       ),
@@ -413,31 +467,25 @@ class _HomePageState extends State<HomePage> {
                     // Use filteredBuses instead of _mockBuses to show only relevant buses
                     ...filteredBuses.map(
                       (bus) => Marker(
-                        point: bus['position'],
-                        width: 80,
-                        height: 80,
+                        point: _validateCoordinates(bus['position'].latitude, bus['position'].longitude),
+                        width: 40,
+                        height: 40,
                         child: GestureDetector(
                           onTap: () => _showBusDetails(bus),
-                          child: const Icon(
-                            Icons.directions_bus,
-                            color: Colors.green,
-                            size: 40,
+                          child: SizedBox(
+                            width: 40,
+                            height: 40,
+                            child: Image.asset(
+                              'assets/images/bus_icon.png',
+                              width: 20,
+                              height: 20,
+                            ),
                           ),
                         ),
                       ),
                     ),
                   ],
                 ),
-                if (_routePoints.isNotEmpty && _routePoints.length >= 2)
-                  PolylineLayer(
-                    polylines: [
-                      Polyline(
-                        points: _routePoints,
-                        color: Colors.blue,
-                        strokeWidth: 4,
-                      ),
-                    ],
-                  ),
               ],
             )
           else
