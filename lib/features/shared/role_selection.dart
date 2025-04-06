@@ -107,15 +107,22 @@ class RoleSelectionPage extends StatelessWidget {
               ),
             );
             
+            // تحويل نوع المستخدم في واجهة المستخدم إلى الدور المناسب في قاعدة البيانات
+            String databaseRole = userType;
+            if (userType == 'passenger') {
+              databaseRole = 'user';
+            }
+            
             print('Updating user role for ID: $userId');
             print('Email: $userEmail');
             print('Phone: $userPhone');
-            print('Selected role: $userType');
+            print('Selected interface role: $userType');
+            print('Database role: $databaseRole');
             
             // Update user role using auth.updateUser
             await supabase.auth.updateUser(
               UserAttributes(
-                data: {'role': userType},
+                data: {'role': databaseRole},
               ),
             );
             print('Auth metadata updated successfully');
@@ -148,16 +155,18 @@ class RoleSelectionPage extends StatelessWidget {
                   await supabase
                       .from('users')
                       .update({
-                        'role': userType,
+                        'role': databaseRole,
                         'updated_at': DateTime.now().toIso8601String()
                       })
                       .eq('id', userId);
+                      
                   print('User role updated in users table');
                 } catch (updateError) {
                   print('Error updating user role: $updateError');
                   if (updateError is PostgrestException) {
                     print('PostgrestException code: ${updateError.code}');
                     print('PostgrestException message: ${updateError.message}');
+                    print('PostgrestException details: ${updateError.details}');
                   }
                 }
               } else {
@@ -171,29 +180,75 @@ class RoleSelectionPage extends StatelessWidget {
                     'id': userId,
                     'email': userEmail,
                     'phone': userPhone,
-                    'role': userType,
+                    'role': databaseRole,
                     'created_at': DateTime.now().toIso8601String(),
                     'email_confirm': true,
                   };
                   
                   print('Attempting to insert with data: $insertData');
-                  await supabase.from('users').insert(insertData);
-                  print('User inserted into users table with role: $userType');
+                  
+                  // تحقق من سياسات RLS قبل الإدخال
+                  print('Checking RLS policies before insert...');
+                  try {
+                    final policies = await supabase.rpc('get_policies_for_table', params: {'table_name': 'users'});
+                    print('Current policies for users table: $policies');
+                  } catch (policyError) {
+                    print('Error checking policies: $policyError');
+                  }
+                  
+                  final response = await supabase.from('users').insert(insertData).select();
+                  print('Insert response: $response');
+                  print('User inserted into users table with role: $databaseRole');
+                  
+                  // تحقق من نجاح الإدخال
+                  final checkInsert = await supabase
+                      .from('users')
+                      .select()
+                      .eq('id', userId)
+                      .maybeSingle();
+                  print('Verification after insert: $checkInsert');
+                  
                 } catch (insertError) {
                   print('Error with standard insert: $insertError');
+                  
+                  if (insertError is PostgrestException) {
+                    print('PostgrestException code: ${insertError.code}');
+                    print('PostgrestException message: ${insertError.message}');
+                    print('PostgrestException details: ${insertError.details}');
+                  }
                   
                   // Approach 2: Try upsert
                   try {
                     print('Trying upsert approach...');
-                    await supabase.from('users').upsert({
+                    final upsertData = {
                       'id': userId,
                       'email': userEmail,
                       'phone': userPhone,
-                      'role': userType,
-                    });
+                      'role': databaseRole,
+                      'created_at': DateTime.now().toIso8601String(),
+                      'email_confirm': true,
+                    };
+                    
+                    final response = await supabase.from('users').upsert(upsertData).select();
+                    print('Upsert response: $response');
                     print('User upserted successfully');
+                    
+                    // تحقق من نجاح الإدخال
+                    final checkUpsert = await supabase
+                        .from('users')
+                        .select()
+                        .eq('id', userId)
+                        .maybeSingle();
+                    print('Verification after upsert: $checkUpsert');
+                    
                   } catch (upsertError) {
                     print('Error with upsert: $upsertError');
+                    
+                    if (upsertError is PostgrestException) {
+                      print('PostgrestException code: ${upsertError.code}');
+                      print('PostgrestException message: ${upsertError.message}');
+                      print('PostgrestException details: ${upsertError.details}');
+                    }
                     
                     // Approach 3: Try minimal insert
                     try {
@@ -201,10 +256,17 @@ class RoleSelectionPage extends StatelessWidget {
                       await supabase.from('users').insert({
                         'id': userId,
                         'email': userEmail,
+                        'role': databaseRole,
                       });
                       print('Minimal user record created');
                     } catch (minimalError) {
                       print('Error with minimal insert: $minimalError');
+                      
+                      if (minimalError is PostgrestException) {
+                        print('PostgrestException code: ${minimalError.code}');
+                        print('PostgrestException message: ${minimalError.message}');
+                        print('PostgrestException details: ${minimalError.details}');
+                      }
                     }
                   }
                 }

@@ -208,6 +208,27 @@ class _LoginPageState extends State<LoginPage> {
         'user_role': role,
       });
       print('User created via stored procedure');
+      
+      // Verify role was set correctly
+      if (role != null) {
+        final createdUser = await supabase
+            .from('users')
+            .select('role')
+            .eq('id', user.id)
+            .maybeSingle();
+            
+        print('Verified user role after creation: ${createdUser?['role']}');
+        
+        // If role doesn't match, update it explicitly
+        if (createdUser != null && createdUser['role'] != role) {
+          print('Role mismatch detected, fixing...');
+          await supabase
+              .from('users')
+              .update({'role': role})
+              .eq('id', user.id);
+          print('Role corrected to: $role');
+        }
+      }
       return; // Exit if successful
     } catch (rpcError) {
       print('Error with stored procedure: $rpcError');
