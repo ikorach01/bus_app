@@ -7,6 +7,7 @@ import 'dart:convert';
 import 'package:provider/provider.dart';
 import 'package:bus_app/providers/settings_provider.dart';
 import 'package:bus_app/features/user/settings_page.dart';
+import 'package:bus_app/features/driver/driver_home/realtime_provider.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -35,6 +36,7 @@ class _HomePageState extends State<HomePage> {
     },
   ];
 
+  // This will be replaced with real-time data
   final List<Map<String, dynamic>> _mockBuses = [
     {
       'busNumber': '101',
@@ -96,6 +98,19 @@ class _HomePageState extends State<HomePage> {
     _getUserLocation();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkForDelays();
+      _fetchActiveBuses();
+    });
+  }
+
+  Future<void> _fetchActiveBuses() async {
+    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+    setState(() {});
+    
+    // Listen for changes in active buses
+    realtimeProvider.addListener(() {
+      if (mounted) {
+        setState(() {});
+      }
     });
   }
 
@@ -325,7 +340,20 @@ class _HomePageState extends State<HomePage> {
     return points;
   }
 
-  void _showBusDetails(Map<String, dynamic> bus) {
+  Future<void> _showBusDetails(Map<String, dynamic> bus) async {
+    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+    
+    // Get driver info for the bus
+    final driverInfo = await realtimeProvider.getDriverInfoForBus(bus['id']);
+    
+    // Get bus photo
+    String? busPhotoBase64;
+    if (driverInfo != null && driverInfo['bus_photo'] != null) {
+      busPhotoBase64 = await realtimeProvider.getBusPhoto(bus['id']);
+    }
+    
+    if (!mounted) return;
+    
     showDialog(
       context: context,
       builder: (context) {
@@ -341,8 +369,24 @@ class _HomePageState extends State<HomePage> {
         final finalDestinationText = isArabic ? 'الوجهة النهائية' : 'Final Destination';
         final closeText = isArabic ? 'إغلاق' : 'Close';
         
+        // Format driver name
+        final String driverName = driverInfo != null 
+            ? '${driverInfo['first_name']} ${driverInfo['last_name']}'
+            : 'Unknown';
+        
+        // Format bus name
+        final String busName = driverInfo != null && driverInfo['bus_name'] != null
+            ? driverInfo['bus_name']
+            : bus['id'].toString();
+        
+        // Format speed
+        final String speed = '${bus['speed']} km/h';
+        
+        // Format ETA
+        final String eta = '${bus['eta_to_destination']} min';
+        
         return AlertDialog(
-          title: Text('$busText ${bus['busNumber']}'),
+          title: Text('$busText $busName'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -350,38 +394,64 @@ class _HomePageState extends State<HomePage> {
               children: [
                 ClipRRect(
                   borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(
-                    bus['busImage'],
-                    height: 150,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      print('Error loading image: $error');
-                      return Container(
-                        height: 150,
-                        width: double.infinity,
-                        color: Colors.grey[300],
-                        child: Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(Icons.directions_bus, size: 50, color: Colors.grey[600]),
-                              const SizedBox(height: 8),
-                              Text(isArabic ? 'لا يمكن تحميل الصورة' : 'Image not available',
-                                  style: TextStyle(color: Colors.grey[600])),
-                            ],
-                          ),
+                  child: busPhotoBase64 != null
+                      ? Image.memory(
+                          base64Decode(busPhotoBase64),
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            print('Error loading image: $error');
+                            return Container(
+                              height: 150,
+                              width: double.infinity,
+                              color: Colors.grey[300],
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.directions_bus, size: 50, color: Colors.grey[600]),
+                                    const SizedBox(height: 8),
+                                    Text(isArabic ? 'لا يمكن تحميل الصورة' : 'Image not available',
+                                        style: TextStyle(color: Colors.grey[600])),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
+                        )
+                      : Image.asset(
+                          'assets/images/busd.png',
+                          height: 150,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            print('Error loading image: $error');
+                            return Container(
+                              height: 150,
+                              width: double.infinity,
+                              color: Colors.grey[300],
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.directions_bus, size: 50, color: Colors.grey[600]),
+                                    const SizedBox(height: 8),
+                                    Text(isArabic ? 'لا يمكن تحميل الصورة' : 'Image not available',
+                                        style: TextStyle(color: Colors.grey[600])),
+                                  ],
+                                ),
+                              ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
                 const SizedBox(height: 10),
                 Text('$destinationText: ${bus['destination']}'),
-                Text('$speedText: ${bus['currentSpeed']}'),
-                Text('$expectedArrivalText: ${bus['expectedArrivalTime']}'),
-                Text('$driverText: ${bus['driverName']}'),
-                Text('$finalDestinationText: ${bus['finalDestination']}'),
+                Text('$speedText: $speed'),
+                Text('$expectedArrivalText: $eta'),
+                Text('$driverText: $driverName'),
+                Text('$finalDestinationText: ${bus['destination']}'),
               ],
             ),
           ),
@@ -400,9 +470,28 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    // Get real-time bus data
+    final realtimeProvider = Provider.of<RealtimeProvider>(context);
+    final realBuses = realtimeProvider.activeBuses;
+    
+    // Convert real-time bus data to map markers
+    final List<Map<String, dynamic>> busesForMap = realBuses.isNotEmpty 
+        ? realBuses.map((bus) => {
+            'id': bus['id'],
+            'destination': bus['destination'] ?? 'Unknown',
+            'speed': bus['speed'] ?? 0,
+            'eta_to_destination': bus['eta_to_destination'] ?? 15,
+            'position': LatLng(
+              bus['latitude'] ?? 0.0,
+              bus['longitude'] ?? 0.0,
+            ),
+          }).toList()
+        : _mockBuses; // Fallback to mock data if no real buses
+    
     // Filter buses based on selected station
-    final filteredBuses = _mockBuses.where((bus) {
-      return bus['destination'] == _selectedStationName || bus['finalDestination'] == _selectedStationName;
+    final filteredBuses = busesForMap.where((bus) {
+      return _selectedStationName == null || 
+             bus['destination'] == _selectedStationName;
     }).toList();
 
     return Scaffold(

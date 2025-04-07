@@ -235,6 +235,13 @@ class _AddInformationPageState extends State<AddInformationPage> {
         // Clear saved data after successful submission
         final prefs = await SharedPreferences.getInstance();
         await prefs.remove('driver_data');
+        
+        // Mark the driver as registered in SharedPreferences
+        final user = supabase.auth.currentUser;
+        if (user != null) {
+          await prefs.setBool('driver_${user.id}_registered', true);
+          print('Driver marked as registered in SharedPreferences');
+        }
 
         // Close loading dialog
         Navigator.pop(context);

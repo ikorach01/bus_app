@@ -12,6 +12,8 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:bus_app/l10n/app_localizations.dart';
 import 'package:provider/provider.dart';
 import 'package:bus_app/providers/settings_provider.dart';
+import 'package:bus_app/features/driver/driver_home/realtime_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Global function to test database connection and permissions
 Future<void> testDatabaseConnection() async {
@@ -93,8 +95,11 @@ void main() async {
   await testDatabaseConnection();
 
   runApp(
-    ChangeNotifierProvider(
-      create: (context) => SettingsProvider(),
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (context) => SettingsProvider()),
+        ChangeNotifierProvider(create: (context) => RealtimeProvider()),
+      ],
       child: const MyApp(),
     ),
   );
@@ -150,40 +155,71 @@ class _MyAppState extends State<MyApp> {
     final user = Supabase.instance.client.auth.currentUser;
 
     if (user != null) {
-      await Supabase.instance.client.auth.refreshSession();
-      if (user.emailConfirmedAt != null) {
-        final userData = user.userMetadata;
-        final role = userData?['role'] as String?;
+      try {
+        await Supabase.instance.client.auth.refreshSession();
+        if (user.emailConfirmedAt != null) {
+          final userData = user.userMetadata;
+          final role = userData?['role'] as String?;
 
-        if (role == null) {
-          _setInitialScreen(RoleSelectionPage(
-            userId: user.id,
-            userEmail: user.email ?? '',
-            userPhone: userData?['phone'] as String? ?? '',
-          ));
-        } else {
-          if (role == 'driver') {
-            // Check if driver has already completed registration
-            try {
-              // Just check if the driver record exists, we don't need to use the data
-              await Supabase.instance.client
-                  .from('drivers')
-                  .select('id') // Only select the ID field to minimize data transfer
-                  .eq('id', user.id)
-                  .single();
-              
-              // If we get here, the driver exists in the database
-              _setInitialScreen(const HomePage2());
-            } catch (e) {
-              // If driver doesn't exist in database, show registration page
-              _setInitialScreen(const AddInformationPage());
+          if (role == null) {
+            _setInitialScreen(RoleSelectionPage(
+              userId: user.id,
+              userEmail: user.email ?? '',
+              userPhone: userData?['phone'] as String? ?? '',
+            ));
+          } else {
+            if (role == 'driver') {
+              // Check if driver has already completed registration
+              try {
+                // First, check SharedPreferences for a flag indicating the driver is registered
+                final prefs = await SharedPreferences.getInstance();
+                final isDriverRegistered = prefs.getBool('driver_${user.id}_registered') ?? false;
+                
+                if (isDriverRegistered) {
+                  // If we have a local record that the driver is registered, go directly to HomePage2
+                  _setInitialScreen(const HomePage2());
+                  print('Driver registered (from SharedPreferences), redirecting to HomePage2');
+                  return;
+                }
+                
+                // If no local record, try a direct query to check if the driver exists
+                final response = await Supabase.instance.client
+                    .from('drivers')
+                    .select('id')
+                    .eq('id', user.id);
+                
+                // If we get a non-empty response, the driver exists
+                if (response != null && response.isNotEmpty) {
+                  // Driver exists in the database, go to HomePage2
+                  _setInitialScreen(const HomePage2());
+                  print('Driver exists, redirecting to HomePage2');
+                  
+                  // Save this information to SharedPreferences for future app launches
+                  await prefs.setBool('driver_${user.id}_registered', true);
+                } else {
+                  // Driver doesn't exist in database, show registration page
+                  _setInitialScreen(const AddInformationPage());
+                  print('Driver does not exist, redirecting to AddInformationPage');
+                }
+              } catch (e) {
+                print('Error checking driver existence: $e');
+                
+                // If there's an error, try direct navigation to HomePage2
+                // This is a safer default since we want to avoid making the user
+                // register multiple times
+                _setInitialScreen(const HomePage2());
+              }
+            } else if (role == 'passenger') {
+              _setInitialScreen(const AskLocationScreen());
             }
-          } else if (role == 'passenger') {
-            _setInitialScreen(const AskLocationScreen());
           }
+        } else {
+          _setInitialScreen(const WelcomePage());
         }
-      } else {
-        _setInitialScreen(const WelcomePage());
+      } catch (e) {
+        print('Error refreshing session: $e');
+        // If session refresh fails, go to login page
+        _setInitialScreen(const LoginPage());
       }
     } else {
       _setInitialScreen(const LoginPage());

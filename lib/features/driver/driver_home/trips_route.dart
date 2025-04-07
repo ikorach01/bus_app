@@ -3,6 +3,9 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'dart:math';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'realtime_provider.dart';
 
 class TripsRoute extends StatefulWidget {
   final String departure;
@@ -26,6 +29,10 @@ class _TripsRouteState extends State<TripsRoute> {
   List<LatLng> _routePoints = [];
   final _location = Location();
   bool _isTracking = false;
+  String? _driverId;
+  String? _busId;
+  String? _startStationId;
+  String? _endStationId;
 
   // Hardcoded municipality coordinates (you should get these from your database)
   final Map<String, LatLng> _municipalityCoordinates = {
@@ -43,7 +50,119 @@ class _TripsRouteState extends State<TripsRoute> {
   void initState() {
     super.initState();
     _initializeLocationTracking();
-    _setupRoute();
+    // Delay the _setupRoute call to ensure the map is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _setupRoute();
+    });
+    _fetchDriverAndBusInfo();
+  }
+
+  Future<void> _fetchDriverAndBusInfo() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) return;
+
+      // Get driver info
+      final driverResponse = await Supabase.instance.client
+          .from('drivers')
+          .select('id, bus_id')
+          .eq('id', user.id)
+          .single();
+
+      setState(() {
+        _driverId = driverResponse['id'];
+        _busId = driverResponse['bus_id'];
+      });
+
+      print('Driver ID: $_driverId, Bus ID: $_busId');
+
+      // Get station IDs from the stations table
+      await _fetchStationIds();
+    } catch (e) {
+      print('Error fetching driver info: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error fetching driver info: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _fetchStationIds() async {
+    try {
+      // Get station IDs from the stations table
+      final departureStation = await Supabase.instance.client
+          .from('stations')
+          .select('id')
+          .eq('name', widget.departure)
+          .maybeSingle();
+      
+      final arrivalStation = await Supabase.instance.client
+          .from('stations')
+          .select('id')
+          .eq('name', widget.arrival)
+          .maybeSingle();
+      
+      setState(() {
+        _startStationId = departureStation != null ? departureStation['id'] : null;
+        _endStationId = arrivalStation != null ? arrivalStation['id'] : null;
+      });
+
+      print('Start Station ID: $_startStationId, End Station ID: $_endStationId');
+      
+      // If stations not found, create them
+      if (_startStationId == null || _endStationId == null) {
+        await _createMissingStations();
+      }
+    } catch (e) {
+      print('Error fetching station IDs: $e');
+    }
+  }
+
+  Future<void> _createMissingStations() async {
+    try {
+      // Create stations if they don't exist
+      if (_startStationId == null && _municipalityCoordinates.containsKey(widget.departure)) {
+        final coords = _municipalityCoordinates[widget.departure]!;
+        final response = await Supabase.instance.client
+            .from('stations')
+            .insert({
+              'name': widget.departure,
+              'latitude': coords.latitude,
+              'longitude': coords.longitude,
+            })
+            .select()
+            .single();
+        
+        setState(() {
+          _startStationId = response['id'];
+        });
+        print('Created start station with ID: $_startStationId');
+      }
+
+      if (_endStationId == null && _municipalityCoordinates.containsKey(widget.arrival)) {
+        final coords = _municipalityCoordinates[widget.arrival]!;
+        final response = await Supabase.instance.client
+            .from('stations')
+            .insert({
+              'name': widget.arrival,
+              'latitude': coords.latitude,
+              'longitude': coords.longitude,
+            })
+            .select()
+            .single();
+        
+        setState(() {
+          _endStationId = response['id'];
+        });
+        print('Created end station with ID: $_endStationId');
+      }
+    } catch (e) {
+      print('Error creating stations: $e');
+    }
   }
 
   Future<void> _initializeLocationTracking() async {
@@ -101,6 +220,9 @@ class _TripsRouteState extends State<TripsRoute> {
   }
 
   void _setupRoute() {
+    // Make sure the map is ready before trying to move it
+    if (!mounted) return;
+    
     // Get coordinates for departure and arrival
     final departureCoords = _municipalityCoordinates[widget.departure];
     final arrivalCoords = _municipalityCoordinates[widget.arrival];
@@ -118,8 +240,13 @@ class _TripsRouteState extends State<TripsRoute> {
       final distance = _calculateDistance(departureCoords, arrivalCoords);
       final zoom = _calculateZoomLevel(distance);
 
-      // Center the map with calculated zoom
-      _mapController.move(LatLng(centerLat, centerLng), zoom);
+      // Center the map with calculated zoom - safely
+      try {
+        _mapController.move(LatLng(centerLat, centerLng), zoom);
+      } catch (e) {
+        debugPrint('Error moving map: $e');
+        // The map might not be ready yet, which is fine
+      }
     }
   }
 
@@ -150,22 +277,89 @@ class _TripsRouteState extends State<TripsRoute> {
     return 7;
   }
 
-  void _startTrip() {
-    setState(() {
-      _isTripStarted = true;
-      _isTracking = true;
-      if (_currentLocation != null) {
-        _routePoints = [LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)];
-      }
-    });
+  Future<void> _startTrip() async {
+    // Check if we have all required information
+    if (_driverId == null || _busId == null || _startStationId == null || _endStationId == null) {
+      // Debug information to help identify the issue
+      print('Missing required information:');
+      print('Driver ID: $_driverId');
+      print('Bus ID: $_busId');
+      print('Start Station ID: $_startStationId');
+      print('End Station ID: $_endStationId');
+      
+      // Show error message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Missing required information to start trip'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      
+      // Try to fetch the information again
+      await _fetchDriverAndBusInfo();
+      return;
+    }
+
+    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+    
+    // Use the actual station names instead of IDs for better user experience
+    final success = await realtimeProvider.startRoute(
+      _driverId!,
+      _busId!,
+      widget.departure,
+      widget.arrival,
+    );
+    
+    if (success) {
+      setState(() {
+        _isTripStarted = true;
+        _isTracking = true;
+        if (_currentLocation != null) {
+          _routePoints = [LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)];
+        }
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Trip started successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to start trip'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
-  void _stopTrip() {
-    setState(() {
-      _isTripStarted = false;
-      _isTracking = false;
-    });
-    // Here you would typically save the route data to your backend
+  void _stopTrip() async {
+    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+    
+    final success = await realtimeProvider.endRoute();
+    
+    if (success) {
+      setState(() {
+        _isTripStarted = false;
+        _isTracking = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Trip ended successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to end trip'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 
   @override
@@ -189,8 +383,9 @@ class _TripsRouteState extends State<TripsRoute> {
                     initialZoom: 12.0,
                     minZoom: 4.0,
                     maxZoom: 18.0,
-                    onTap: (_, __) {
-                      // Handle tap events if needed
+                    onMapReady: () {
+                      // Now it's safe to use the map controller
+                      _setupRoute();
                     },
                   ),
                   children: [
