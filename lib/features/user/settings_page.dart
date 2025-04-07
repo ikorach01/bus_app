@@ -202,23 +202,17 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final userId = supabase.auth.currentUser?.id;
       if (userId != null) {
-        // 1. حذف بيانات المستخدم من جدول users
-        await supabase.from('users').delete().eq('id', userId);
-
-        // 2. حذف تفضيلات المستخدم
-        await supabase.from('user_preferences').delete().eq('user_id', userId);
-
-        // 3. حذف الحساب من نظام المصادقة
-        // Note: Client-side SDK doesn't have admin.deleteUser method
-        // This would typically be handled by a backend function
-        // await supabase.auth.admin.deleteUser(userId);
-
-        // 4. تسجيل الخروج
+        // Delete user data from user_profiles table
+        await supabase.from('user_profiles').delete().eq('id', userId);
+        
+        // Delete auth user
+        await supabase.auth.admin.deleteUser(userId);
+        
+        // Sign out
         await supabase.auth.signOut();
-
+        
         if (!mounted) return;
-        Navigator.pushAndRemoveUntil(
-          context,
+        Navigator.of(context).pushAndRemoveUntil(
           MaterialPageRoute(builder: (context) => const LoginPage()),
           (route) => false,
         );
@@ -226,7 +220,10 @@ class _SettingsPageState extends State<SettingsPage> {
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Delete account failed: ${e.toString()}')),
+        SnackBar(
+          content: Text('Error deleting account: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
       );
     }
   }

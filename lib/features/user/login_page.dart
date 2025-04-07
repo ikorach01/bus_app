@@ -31,6 +31,26 @@ class _LoginPageState extends State<LoginPage> {
       if (isLogin) {
         print('Attempting to sign in with email: ${emailController.text.trim()}');
         
+        // Check if email exists in auth.users
+        try {
+          final existingUser = await supabase
+              .rpc('check_email_exists', params: {
+                'check_email': emailController.text.trim(),
+              });
+
+          if (existingUser == false) {
+            throw Exception(
+              'This email is not registered. Please sign up first or use a different email address.'
+            );
+          }
+        } catch (e) {
+          if (e is PostgrestException) {
+            print('Error checking email: ${e.message}');
+          } else {
+            rethrow;
+          }
+        }
+        
         final response = await supabase.auth.signInWithPassword(
           email: emailController.text.trim(),
           password: passwordController.text.trim(),
@@ -50,16 +70,16 @@ class _LoginPageState extends State<LoginPage> {
         // جلب بيانات المستخدم من Supabase
         final session = supabase.auth.currentSession;
         final userData = session?.user.userMetadata;
-        final role = userData?['role'] as String?;
+        final userType = userData?['user_type'] as String?;
         
         print('User metadata: $userData');
-        print('User role: $role');
+        print('User type: $userType');
         
         // Check if user exists in the database and insert if not
-        await _checkAndInsertUserData(user, role);
+        await _checkAndInsertUserData(user, userType);
 
-        if (role == null) {
-          // المستخدم يسجل الدخول لأول مرة ولم يحدد دوره بعد
+        if (userType == null) {
+          // المستخدم يسجل الدخول لأول مرة ولم يحدد نوعه بعد
           print('First-time login detected. Redirecting to role selection.');
           if (!context.mounted) return;
           Navigator.pushReplacement(
@@ -73,15 +93,15 @@ class _LoginPageState extends State<LoginPage> {
             ),
           );
         } else {
-          // المستخدم لديه دور مسجل، الانتقال بناءً على الدور
-          print('Existing user detected with role: $role. Redirecting accordingly.');
+          // المستخدم لديه نوع مسجل، الانتقال بناءً على النوع
+          print('Existing user detected with type: $userType. Redirecting accordingly.');
           if (!context.mounted) return;
-          if (role == 'passenger') {
+          if (userType == 'passenger') {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const AskLocationScreen()),
             );
-          } else if (role == 'driver') {
+          } else if (userType == 'driver') {
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const AddInformationPage()),
@@ -93,6 +113,26 @@ class _LoginPageState extends State<LoginPage> {
           throw Exception("Passwords do not match.");
         }
 
+        // Check if email already exists in auth.users
+        try {
+          final existingUser = await supabase
+              .rpc('check_email_exists', params: {
+                'check_email': emailController.text.trim(),
+              });
+
+          if (existingUser == true) {
+            throw Exception(
+              'This email is already registered. Please try logging in instead, or use a different email address.'
+            );
+          }
+        } catch (e) {
+          if (e is PostgrestException) {
+            print('Error checking email: ${e.message}');
+          } else {
+            rethrow;
+          }
+        }
+
         print('Attempting to sign up with email: ${emailController.text.trim()}');
         
         final response = await supabase.auth.signUp(
@@ -101,7 +141,7 @@ class _LoginPageState extends State<LoginPage> {
           emailRedirectTo: 'bus_app://auth/callback',
           data: {
             'phone': phoneController.text.trim(),
-            'role': null, // لم يتم تحديد الدور بعد، سيتم تحديده لاحقًا
+            'user_type': null, // لم يتم تحديد النوع بعد، سيتم تحديده لاحقًا
           },
         );
 
@@ -109,38 +149,28 @@ class _LoginPageState extends State<LoginPage> {
         if (user != null) {
           print('User signed up successfully: ${user.id}');
           
-          // Insert user data into the users table
+          // Insert user data into user_profiles table
           try {
-            print('Attempting to insert user data into users table...');
-            print('User ID: ${user.id}');
-            print('Email: ${emailController.text.trim()}');
-            print('Phone: ${phoneController.text.trim()}');
+            print('Attempting to insert user data into user_profiles table...');
             
-            // Check if the users table exists and is accessible
-            try {
-              final tableCheck = await supabase.from('users').select('count').limit(1);
-              print('Users table check result: $tableCheck');
-            } catch (tableError) {
-              print('Error checking users table: $tableError');
-              print('This may indicate that the users table does not exist or you do not have access to it');
-            }
+            final profileData = {
+              'id': user.id,
+              'email': emailController.text.trim(),
+              'phone': phoneController.text.trim(),
+              'user_type': null,
+              'created_at': DateTime.now().toIso8601String(),
+              'updated_at': DateTime.now().toIso8601String(),
+            };
             
-            // Get schema information
-            try {
-              // Use REST API directly to avoid execute method issue
-              final schemaInfo = await supabase
-                  .from('information_schema.tables')
-                  .select('table_name, table_schema')
-                  .eq('table_name', 'users');
-              print('Schema info for users table: $schemaInfo');
-            } catch (schemaError) {
-              print('Error getting schema info: $schemaError');
-            }
+            await supabase.from('user_profiles').upsert(profileData);
+            print('User profile created successfully');
             
-            // Try multiple approaches to insert the user data
-            await _insertUserWithMultipleApproaches(user);
           } catch (dbError) {
             print('Error in database operations: $dbError');
+            if (dbError is PostgrestException) {
+              print('PostgrestException code: ${dbError.code}');
+              print('PostgrestException message: ${dbError.message}');
+            }
           }
           
           _showMessage('Registration successful! Please check your email to confirm your account.', Colors.green);
@@ -159,13 +189,13 @@ class _LoginPageState extends State<LoginPage> {
   }
   
   // Helper function to check if user exists in database and insert if not
-  Future<void> _checkAndInsertUserData(User user, String? role) async {
+  Future<void> _checkAndInsertUserData(User user, String? userType) async {
     try {
       print('Checking if user exists in database: ${user.id}');
       
-      // Check if user exists in the users table
+      // Check if user exists in the user_profiles table
       final existingUser = await supabase
-          .from('users')
+          .from('user_profiles')
           .select()
           .eq('id', user.id)
           .maybeSingle();
@@ -174,139 +204,48 @@ class _LoginPageState extends State<LoginPage> {
       
       if (existingUser == null) {
         print('User not found in database, inserting now...');
-        await _insertUserWithMultipleApproaches(user, role: role);
-      } else {
-        print('User already exists in database');
         
-        // Update role if needed
-        if (role != null && (existingUser['role'] == null || existingUser['role'] != role)) {
-          print('Updating user role to: $role');
-          await supabase
-              .from('users')
-              .update({
-                'role': role,
-                'updated_at': DateTime.now().toIso8601String()
-              })
-              .eq('id', user.id);
-          print('User role updated successfully');
-        }
-      }
-    } catch (e) {
-      print('Error in _checkAndInsertUserData: $e');
-    }
-  }
-  
-  // Helper function to try multiple approaches for inserting user data
-  Future<void> _insertUserWithMultipleApproaches(User user, {String? role}) async {
-    // Try direct SQL query using stored procedure
-    try {
-      print('Approach 1: Using stored procedure...');
-      await supabase.rpc('create_user', params: {
-        'user_id': user.id,
-        'user_email': user.email ?? emailController.text.trim(),
-        'user_phone': phoneController.text.trim(),
-        'user_role': role,
-      });
-      print('User created via stored procedure');
-      
-      // Verify role was set correctly
-      if (role != null) {
-        final createdUser = await supabase
-            .from('users')
-            .select('role')
-            .eq('id', user.id)
-            .maybeSingle();
-            
-        print('Verified user role after creation: ${createdUser?['role']}');
+        final profileData = {
+          'id': user.id,
+          'email': user.email,
+          'phone': user.userMetadata?['phone'],
+          'user_type': userType,
+          'created_at': DateTime.now().toIso8601String(),
+          'updated_at': DateTime.now().toIso8601String(),
+        };
         
-        // If role doesn't match, update it explicitly
-        if (createdUser != null && createdUser['role'] != role) {
-          print('Role mismatch detected, fixing...');
-          await supabase
-              .from('users')
-              .update({'role': role})
-              .eq('id', user.id);
-          print('Role corrected to: $role');
-        }
+        await supabase.from('user_profiles').upsert(profileData);
+        print('User profile created successfully');
+        
+      } else if (userType != null && existingUser['user_type'] != userType) {
+        print('Updating user type to: $userType');
+        
+        await supabase
+            .from('user_profiles')
+            .update({
+              'user_type': userType,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('id', user.id);
+        
+        print('User type updated successfully');
       }
-      return; // Exit if successful
-    } catch (rpcError) {
-      print('Error with stored procedure: $rpcError');
-    }
-    
-    // Approach 2: Standard insert
-    try {
-      print('Approach 2: Standard insert...');
-      final userData = {
-        'id': user.id,
-        'email': user.email ?? emailController.text.trim(),
-        'phone': phoneController.text.trim(),
-        'created_at': DateTime.now().toIso8601String(),
-      };
-      
-      // Add role if provided
-      if (role != null) {
-        userData['role'] = role;
+    } catch (error) {
+      print('Error in database operations: $error');
+      if (error is PostgrestException) {
+        print('PostgrestException code: ${error.code}');
+        print('PostgrestException message: ${error.message}');
       }
-      
-      print('Inserting data: $userData');
-      await supabase.from('users').insert(userData);
-      print('User data inserted into users table');
-      return; // Exit if successful
-    } catch (insertError) {
-      print('Error with standard insert: $insertError');
-      
-      if (insertError is PostgrestException) {
-        print('PostgrestException code: ${insertError.code}');
-        print('PostgrestException message: ${insertError.message}');
-        print('PostgrestException details: ${insertError.details}');
-      }
-    }
-    
-    // Approach 3: Upsert
-    try {
-      print('Approach 3: Trying upsert...');
-      final userData = {
-        'id': user.id,
-        'email': user.email ?? emailController.text.trim(),
-        'phone': phoneController.text.trim(),
-      };
-      
-      // Add role if provided
-      if (role != null) {
-        userData['role'] = role;
-      }
-      
-      await supabase.from('users').upsert(userData);
-      print('User upserted successfully');
-      return; // Exit if successful
-    } catch (upsertError) {
-      print('Error with upsert: $upsertError');
-    }
-    
-    // Approach 4: Minimal insert
-    try {
-      print('Approach 4: Minimal insert...');
-      final userData = {
-        'id': user.id,
-        'email': user.email ?? emailController.text.trim(),
-      };
-      
-      // Add role if provided
-      if (role != null) {
-        userData['role'] = role;
-      }
-      
-      await supabase.from('users').insert(userData);
-      print('Minimal user record created');
-    } catch (minimalError) {
-      print('Error with minimal insert: $minimalError');
     }
   }
 
   void _showMessage(String message, Color color) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message), backgroundColor: color, duration: const Duration(seconds: 3)),
+      SnackBar(
+        content: Text(message),
+        backgroundColor: color,
+      ),
     );
   }
 

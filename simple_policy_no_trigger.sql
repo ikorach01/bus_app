@@ -6,6 +6,7 @@ DROP POLICY IF EXISTS "Allow users to insert their own record" ON users;
 DROP POLICY IF EXISTS "Allow users to select their own data" ON users;
 DROP POLICY IF EXISTS "Allow users to update their own data" ON users;
 DROP POLICY IF EXISTS "Admins can read all users" ON users;
+DROP POLICY IF EXISTS "Allow authenticated users to insert data" ON users;
 
 -- تأكد من تفعيل أمان الصفوف
 ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
@@ -16,7 +17,7 @@ CREATE POLICY "Allow authenticated users to insert data"
 ON users
 FOR INSERT
 TO authenticated
-WITH CHECK (true);
+WITH CHECK (auth.uid() = id);
 
 -- سياسات أخرى بدون تغيير
 CREATE POLICY "Allow users to select their own data"
@@ -39,3 +40,14 @@ TO authenticated
 USING (EXISTS (
   SELECT 1 FROM users u WHERE u.id = auth.uid() AND u.role = 'admin'
 ));
+
+
+alter policy "Admins can update all users"
+on "public"."users"
+to authenticated
+using (
+  (EXISTS ( SELECT 1
+   FROM users u
+  WHERE ((u.id = auth.uid()) AND (u.role = 'admin'::text))))
+
+);

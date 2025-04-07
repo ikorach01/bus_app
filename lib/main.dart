@@ -19,13 +19,13 @@ Future<void> testDatabaseConnection() async {
     print('Testing Supabase database connection...');
     final supabase = Supabase.instance.client;
     
-    // Test 1: Check if we can query the users table
-    print('Test 1: Querying users table...');
+    // Test 1: Check if we can query the user_profiles table
+    print('Test 1: Querying user_profiles table...');
     try {
-      final result = await supabase.from('users').select('count').limit(1);
-      print('Users table query result: $result');
+      final result = await supabase.from('user_profiles').select('count').limit(1);
+      print('User_profiles table query result: $result');
     } catch (e) {
-      print('Error querying users table: $e');
+      print('Error querying user_profiles table: $e');
     }
     
     // Test 2: Check database schema
@@ -56,7 +56,7 @@ Future<void> testDatabaseConnection() async {
     print('Test 4: Attempting test insert...');
     try {
       final testId = 'test_${DateTime.now().millisecondsSinceEpoch}';
-      await supabase.from('users').insert({
+      await supabase.from('user_profiles').insert({
         'id': testId,
         'email': 'test@example.com',
         'created_at': DateTime.now().toIso8601String(),
@@ -64,7 +64,7 @@ Future<void> testDatabaseConnection() async {
       print('Test insert successful');
       
       // Clean up test record
-      await supabase.from('users').delete().eq('id', testId);
+      await supabase.from('user_profiles').delete().eq('id', testId);
       print('Test record deleted');
     } catch (e) {
       print('Error with test insert: $e');

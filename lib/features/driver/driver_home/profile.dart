@@ -28,17 +28,11 @@ class _ProfilePageState extends State<ProfilePage> {
     });
 
     try {
-      final user = _supabase.auth.currentUser;
-      if (user != null) {
-        final userData = await _supabase
-            .from('users')
-            .select()
-            .eq('id', user.id)
-            .single();
-
+      final userData = await _getUserData();
+      if (userData != null) {
         setState(() {
           _name = userData['full_name'] ?? 'No name';
-          _email = user.email ?? 'No email';
+          _email = _supabase.auth.currentUser?.email ?? 'No email';
           _phone = userData['phone'] ?? 'No phone';
           _profileImageUrl = userData['avatar_url'] ?? '';
         });
@@ -53,6 +47,24 @@ class _ProfilePageState extends State<ProfilePage> {
       setState(() {
         _isLoading = false;
       });
+    }
+  }
+
+  Future<Map<String, dynamic>?> _getUserData() async {
+    try {
+      final userId = _supabase.auth.currentUser?.id;
+      if (userId == null) return null;
+
+      final data = await _supabase
+            .from('user_profiles')
+            .select()
+            .eq('id', userId)
+            .single();
+      
+      return data;
+    } catch (e) {
+      print('Error fetching user data: $e');
+      return null;
     }
   }
 
