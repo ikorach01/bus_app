@@ -4,6 +4,8 @@ import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'trips_route.dart';
 import 'settings2.dart';
+import 'departure2.dart';
+import 'destination2.dart';
 
 class HomePage2 extends StatefulWidget {
   const HomePage2({Key? key}) : super(key: key);
@@ -155,6 +157,45 @@ class _HomePage2State extends State<HomePage2> {
         LatLng(locationData.latitude!, locationData.longitude!),
         14.0,
       );
+    }
+  }
+
+  Future<void> _openDeparturePage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const Departure2Page()),
+    );
+    
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        _departureController.text = result['name'];
+        // If you have coordinates, you can set them here
+        if (result['latitude'] != null && result['longitude'] != null) {
+          final lat = double.parse(result['latitude'].toString());
+          final lng = double.parse(result['longitude'].toString());
+          _mapController.move(LatLng(lat, lng), 14.0);
+        }
+      });
+    }
+  }
+
+  Future<void> _openDestinationPage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const Destination2Page()),
+    );
+    
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        _arrivalController.text = result['name'];
+        // If you have coordinates, you can set them here
+        if (result['latitude'] != null && result['longitude'] != null) {
+          final lat = double.parse(result['latitude'].toString());
+          final lng = double.parse(result['longitude'].toString());
+          _destinationLocation = LatLng(lat, lng);
+          _mapController.move(LatLng(lat, lng), 14.0);
+        }
+      });
     }
   }
 
@@ -362,6 +403,8 @@ class _HomePage2State extends State<HomePage2> {
                             prefixIcon: Icon(Icons.location_on, color: const Color(0xFF2A52C9)),
                           ),
                           style: TextStyle(fontSize: 16),
+                          readOnly: true, // Make it read-only
+                          onTap: _openDeparturePage, // Open departure page on tap
                         ),
                       ),
                       const SizedBox(height: 16),
@@ -380,6 +423,8 @@ class _HomePage2State extends State<HomePage2> {
                             prefixIcon: Icon(Icons.location_on, color: const Color(0xFF2A52C9)),
                           ),
                           style: TextStyle(fontSize: 16),
+                          readOnly: true, // Make it read-only
+                          onTap: _openDestinationPage, // Open destination page on tap
                         ),
                       ),
                       const SizedBox(height: 24),

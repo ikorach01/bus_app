@@ -1,10 +1,9 @@
-import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; // For image picking
-import 'dart:io'; // For handling file paths
-import 'package:supabase_flutter/supabase_flutter.dart'; // For Supabase integration
-import 'add_information.dart'; // Import the AddInformationPage
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:io';
+import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -112,86 +111,193 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
     }
   }
 
-  bool _validateInputs() {
-    // Create a specific error message based on what's missing
-    List<String> missingFields = [];
-    
-    if (registrationPlateController.text.trim().isEmpty) {
-      missingFields.add('Registration plate number');
-    }
-    
-    if (busNameController.text.trim().isEmpty) {
-      missingFields.add('Bus name');
-    }
-    
-    if (_busImage == null) {
-      missingFields.add('Bus image');
-    }
-    
-    if (missingFields.isNotEmpty) {
-      String errorMessage = 'Please complete the following:';
-      for (var field in missingFields) {
-        errorMessage += '\n• $field is required';
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            },
-          ),
-        ),
-      );
-      return false;
-    }
-    
-    return true;
-  }
-
   Future<void> _submitVehicleInfo() async {
-    if (!_validateInputs()) return;
+    // Show loading dialog
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const Center(
+          child: CircularProgressIndicator(
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          ),
+        );
+      },
+    );
 
     try {
-      // Update driver data
-      _driverData['vehicle_registration_plate'] = registrationPlateController.text.trim();
-      _driverData['bus_name'] = busNameController.text.trim();
-      
-      // Save data before navigating
-      await _saveData();
-      
-      // Navigate back to AddInformationPage with updated data
-      Navigator.push(
-        context,
-        MaterialPageRoute(
-          builder: (context) => AddInformationPage(driverData: _driverData),
-        ),
-      );
-    } catch (e) {
-      // Determine the specific error
-      String errorMessage = 'An error occurred while saving vehicle information.';
-      
-      if (e.toString().contains('network')) {
-        errorMessage = 'Network error. Please check your internet connection.';
+      // Get current user
+      final user = supabase.auth.currentUser;
+      if (user == null) {
+        // Close loading dialog
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('You must be logged in to submit vehicle information.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
       }
+
+      print('Current user ID: ${user.id}');
+
+      // Validate required fields
+      if (registrationPlateController.text.trim().isEmpty) {
+        // Close loading dialog
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter the vehicle registration plate.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      if (busNameController.text.trim().isEmpty) {
+        // Close loading dialog
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please enter the bus name.'),
+            backgroundColor: Colors.red,
+          ),
+        );
+        return;
+      }
+
+      // Prepare data for saving
+      final vehicleData = {
+        'vehicle_registration_plate': registrationPlateController.text.trim(),
+        'bus_name': busNameController.text.trim(),
+      };
+
+      // Add bus photo if available
+      if (_busImage != null) {
+        // Convert image bytes to base64 string for storage
+        final bytes = await _busImage!.readAsBytes();
+        final base64Image = base64Encode(bytes);
+        vehicleData['bus_photo'] = base64Image;
+      }
+
+      try {
+        // First, create a bus record
+        final busData = {
+          'vehicle_registration_plate': registrationPlateController.text.trim(),
+          'bus_name': busNameController.text.trim(),
+          'created_at': DateTime.now().toIso8601String(),
+        };
+
+        if (_busImage != null) {
+          final bytes = await _busImage!.readAsBytes();
+          busData['bus_photo'] = base64Encode(bytes);
+        }
+
+        print('Inserting bus data: ${registrationPlateController.text.trim()}');
+        
+        // Insert into buses table and get the ID
+        final busResponse = await supabase
+            .from('buses')
+            .insert(busData)
+            .select('id')
+            .single();
+            
+        print('Bus inserted with ID: ${busResponse['id']}');
+
+        // Then update the driver record with the bus information
+        final driverUpdateData = {
+          'vehicle_registration_plate': registrationPlateController.text.trim(),
+          'bus_name': busNameController.text.trim(),
+          'bus_id': busResponse['id'],
+        };
+
+        if (_busImage != null) {
+          final bytes = await _busImage!.readAsBytes();
+          driverUpdateData['bus_photo'] = base64Encode(bytes);
+        }
+
+        print('Updating driver record for user: ${user.id}');
+        
+        // Update the driver record
+        await supabase
+            .from('drivers')
+            .update(driverUpdateData)
+            .eq('id', user.id);
+            
+        print('Driver record updated successfully');
+
+        // Save to SharedPreferences for the registration flow
+        final prefs = await SharedPreferences.getInstance();
+        final driverData = prefs.getString('driver_data');
+        Map<String, dynamic> updatedDriverData = {};
+
+        if (driverData != null) {
+          updatedDriverData = json.decode(driverData);
+        }
+
+        // Update with vehicle information
+        updatedDriverData['vehicle_registration_plate'] = registrationPlateController.text.trim();
+        updatedDriverData['bus_name'] = busNameController.text.trim();
+        
+        if (_busImage != null) {
+          final bytes = await _busImage!.readAsBytes();
+          updatedDriverData['bus_photo'] = bytes;
+        }
+
+        // Save back to SharedPreferences
+        await prefs.setString('driver_data', json.encode(updatedDriverData));
+
+        // Close loading dialog
+        Navigator.pop(context);
+
+        // Show success message
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vehicle information saved successfully!'),
+            backgroundColor: Colors.green,
+          ),
+        );
+
+        // Navigate to the next screen or back
+        Navigator.pop(context, true);
+      } catch (e) {
+        print('Error saving vehicle information: $e');
+        
+        // Close loading dialog
+        Navigator.pop(context);
+        
+        // Show error message with details
+        String errorMessage = 'Failed to save vehicle information.';
+        
+        if (e.toString().contains('duplicate key')) {
+          errorMessage = 'A vehicle with this registration plate already exists.';
+        } else if (e.toString().contains('permission denied')) {
+          errorMessage = 'You do not have permission to save vehicle information. Please check your authentication.';
+        } else if (e.toString().contains('violates row-level security policy')) {
+          errorMessage = 'Security policy violation. Please contact support.';
+        }
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('$errorMessage\n\nDetails: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
+    } catch (e) {
+      print('General error: $e');
       
+      // Close loading dialog
+      Navigator.pop(context);
+      
+      // Show error message
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('$errorMessage\n\nDetails: ${e.toString()}'),
+          content: Text('An error occurred: ${e.toString()}'),
           backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            },
-          ),
+          duration: const Duration(seconds: 10),
         ),
       );
     }

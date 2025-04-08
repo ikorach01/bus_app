@@ -60,18 +60,73 @@ class _TripsRouteState extends State<TripsRoute> {
   Future<void> _fetchDriverAndBusInfo() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        print('No authenticated user found');
+        return;
+      }
 
-      // Get driver info
+      // Get driver info including vehicle_registration_plate
       final driverResponse = await Supabase.instance.client
           .from('drivers')
-          .select('id, bus_id')
+          .select('id, bus_id, vehicle_registration_plate')
           .eq('id', user.id)
           .single();
 
+      // Set driver ID
       setState(() {
         _driverId = driverResponse['id'];
-        _busId = driverResponse['bus_id'];
+      });
+      
+      // Check if bus_id is null and try to get it from the buses table using vehicle_registration_plate
+      String? busId = driverResponse['bus_id'];
+      String? vehiclePlate = driverResponse['vehicle_registration_plate'];
+      
+      if ((busId == null || busId.isEmpty) && vehiclePlate != null && vehiclePlate.isNotEmpty) {
+        print('Bus ID is null in drivers table, attempting to find bus using vehicle plate: $vehiclePlate');
+        
+        // Try to get the bus using vehicle_registration_plate
+        final busResponse = await Supabase.instance.client
+            .from('buses')
+            .select('id')
+            .eq('vehicle_registration_plate', vehiclePlate)
+            .maybeSingle();
+            
+        if (busResponse != null) {
+          busId = busResponse['id'];
+          print('Found bus with ID: $busId for vehicle plate: $vehiclePlate');
+          
+          // Update the driver record with the bus ID
+          await Supabase.instance.client
+              .from('drivers')
+              .update({'bus_id': busId})
+              .eq('id', user.id);
+          
+          print('Updated driver with bus ID: $busId');
+        } else {
+          // Bus doesn't exist yet, create it
+          print('No bus found for vehicle plate: $vehiclePlate, creating new bus');
+          final newBusResponse = await Supabase.instance.client
+              .from('buses')
+              .insert({
+                'vehicle_registration_plate': vehiclePlate,
+                'bus_name': 'Bus for $vehiclePlate'
+              })
+              .select()
+              .single();
+              
+          busId = newBusResponse['id'];
+          print('Created new bus with ID: $busId');
+          
+          // Update the driver record with the new bus ID
+          await Supabase.instance.client
+              .from('drivers')
+              .update({'bus_id': busId})
+              .eq('id', user.id);
+        }
+      }
+
+      setState(() {
+        _busId = busId;
       });
 
       print('Driver ID: $_driverId, Bus ID: $_busId');
@@ -297,42 +352,82 @@ class _TripsRouteState extends State<TripsRoute> {
       
       // Try to fetch the information again
       await _fetchDriverAndBusInfo();
-      return;
-    }
-
-    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
-    
-    // Use the actual station names instead of IDs for better user experience
-    final success = await realtimeProvider.startRoute(
-      _driverId!,
-      _busId!,
-      widget.departure,
-      widget.arrival,
-    );
-    
-    if (success) {
-      setState(() {
-        _isTripStarted = true;
-        _isTracking = true;
-        if (_currentLocation != null) {
-          _routePoints = [LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)];
-        }
-      });
       
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Trip started successfully'),
-          backgroundColor: Colors.green,
-        ),
+      // Check again after fetching
+      if (_driverId == null || _busId == null || _startStationId == null || _endStationId == null) {
+        // If still missing, show a more detailed error message
+        if (_driverId == null) {
+          _showDetailedErrorMessage('Driver ID is missing. Please ensure you are logged in correctly.');
+        } else if (_busId == null) {
+          _showDetailedErrorMessage('Bus ID is missing. Please contact an administrator to assign a bus to your account.');
+        } else if (_startStationId == null || _endStationId == null) {
+          _showDetailedErrorMessage('Station information is missing. Please check that "${widget.departure}" and "${widget.arrival}" are valid stations.');
+        }
+        return;
+      }
+    }
+    
+    // If we reach here, all required information is available
+    try {
+      // Get the realtime provider
+      final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+      
+      // Use the actual station names instead of IDs for better user experience
+      final success = await realtimeProvider.startRoute(
+        _driverId!,
+        _busId!,
+        widget.departure,
+        widget.arrival,
       );
-    } else {
+      
+      if (success) {
+        setState(() {
+          _isTripStarted = true;
+          _isTracking = true;
+          if (_currentLocation != null) {
+            _routePoints = [LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)];
+          }
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trip started successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to start trip'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error starting trip: $e');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to start trip'),
+        SnackBar(
+          content: Text('Error starting trip: $e'),
           backgroundColor: Colors.red,
         ),
       );
     }
+  }
+  
+  void _showDetailedErrorMessage(String message) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cannot Start Trip'),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _stopTrip() async {
