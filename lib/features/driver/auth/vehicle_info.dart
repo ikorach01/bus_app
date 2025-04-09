@@ -167,65 +167,100 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
         return;
       }
 
-      // Prepare data for saving
-      final vehicleData = {
-        'vehicle_registration_plate': registrationPlateController.text.trim(),
-        'bus_name': busNameController.text.trim(),
-      };
-
-      // Add bus photo if available
-      if (_busImage != null) {
-        // Convert image bytes to base64 string for storage
-        final bytes = await _busImage!.readAsBytes();
-        final base64Image = base64Encode(bytes);
-        vehicleData['bus_photo'] = base64Image;
-      }
-
       try {
-        // First, create a bus record
-        final busData = {
-          'vehicle_registration_plate': registrationPlateController.text.trim(),
-          'bus_name': busNameController.text.trim(),
-          'created_at': DateTime.now().toIso8601String(),
-        };
-
-        if (_busImage != null) {
-          final bytes = await _busImage!.readAsBytes();
-          busData['bus_photo'] = base64Encode(bytes);
-        }
-
-        print('Inserting bus data: ${registrationPlateController.text.trim()}');
-        
-        // Insert into buses table and get the ID
-        final busResponse = await supabase
-            .from('buses')
-            .insert(busData)
-            .select('id')
-            .single();
+        // First, check if the driver exists
+        print('Checking if driver exists with ID: ${user.id}');
+        final driverExists = await supabase
+            .from('drivers')
+            .select('id, vehicle_registration_plate')
+            .eq('id', user.id)
+            .maybeSingle();
             
-        print('Bus inserted with ID: ${busResponse['id']}');
-
-        // Then update the driver record with the bus information
-        final driverUpdateData = {
-          'vehicle_registration_plate': registrationPlateController.text.trim(),
-          'bus_name': busNameController.text.trim(),
-          'bus_id': busResponse['id'],
-        };
-
+        if (driverExists == null) {
+          // Driver doesn't exist yet
+          Navigator.pop(context); // Close loading dialog
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please complete your driver registration first.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+          return;
+        }
+        
+        final vehicleRegistrationPlate = registrationPlateController.text.trim();
+        final busName = busNameController.text.trim();
+        
+        // Prepare bus image if available
+        String? busPhotoBase64;
         if (_busImage != null) {
           final bytes = await _busImage!.readAsBytes();
-          driverUpdateData['bus_photo'] = base64Encode(bytes);
+          busPhotoBase64 = base64Encode(bytes);
         }
-
-        print('Updating driver record for user: ${user.id}');
         
-        // Update the driver record
+        // Create a transaction-like operation
+        // 1. First, update the driver with the vehicle registration plate
+        print('Updating driver with vehicle registration plate: $vehicleRegistrationPlate');
         await supabase
             .from('drivers')
-            .update(driverUpdateData)
+            .update({
+              'vehicle_registration_plate': vehicleRegistrationPlate,
+              'bus_name': busName,
+              'bus_photo': busPhotoBase64,
+            })
             .eq('id', user.id);
             
-        print('Driver record updated successfully');
+        print('Driver updated successfully');
+        
+        // 2. Then, create or update the bus record
+        print('Creating/updating bus record');
+        final busData = {
+          'vehicle_registration_plate': vehicleRegistrationPlate,
+          'bus_name': busName,
+          'created_at': DateTime.now().toIso8601String(),
+        };
+        
+        if (busPhotoBase64 != null) {
+          busData['bus_photo'] = busPhotoBase64;
+        }
+        
+        // Check if a bus with this registration plate already exists
+        final existingBus = await supabase
+            .from('buses')
+            .select('id')
+            .eq('vehicle_registration_plate', vehicleRegistrationPlate)
+            .maybeSingle();
+            
+        String busId;
+        if (existingBus != null) {
+          // Update existing bus
+          print('Updating existing bus with ID: ${existingBus['id']}');
+          await supabase
+              .from('buses')
+              .update(busData)
+              .eq('id', existingBus['id']);
+          busId = existingBus['id'];
+        } else {
+          // Insert new bus
+          print('Inserting new bus');
+          final busResponse = await supabase
+              .from('buses')
+              .insert(busData)
+              .select('id')
+              .single();
+          busId = busResponse['id'];
+        }
+        
+        print('Bus saved with ID: $busId');
+        
+        // 3. Finally, update the driver with the bus_id
+        print('Updating driver with bus_id: $busId');
+        await supabase
+            .from('drivers')
+            .update({'bus_id': busId})
+            .eq('id', user.id);
+            
+        print('Driver updated with bus ID');
 
         // Save to SharedPreferences for the registration flow
         final prefs = await SharedPreferences.getInstance();
@@ -237,8 +272,8 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
         }
 
         // Update with vehicle information
-        updatedDriverData['vehicle_registration_plate'] = registrationPlateController.text.trim();
-        updatedDriverData['bus_name'] = busNameController.text.trim();
+        updatedDriverData['vehicle_registration_plate'] = vehicleRegistrationPlate;
+        updatedDriverData['bus_name'] = busName;
         
         if (_busImage != null) {
           final bytes = await _busImage!.readAsBytes();
@@ -276,6 +311,8 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
           errorMessage = 'You do not have permission to save vehicle information. Please check your authentication.';
         } else if (e.toString().contains('violates row-level security policy')) {
           errorMessage = 'Security policy violation. Please contact support.';
+        } else if (e.toString().contains('violates foreign key constraint')) {
+          errorMessage = 'Invalid reference. Please check your data.';
         }
         
         ScaffoldMessenger.of(context).showSnackBar(
