@@ -21,9 +21,13 @@ class _SettingsPageState extends State<SettingsPage> {
   @override
   void initState() {
     super.initState();
-    final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
-    _delayAlertsEnabled = settingsProvider.delayAlertsEnabled;
-    _selectedLanguage = settingsProvider.language;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final settingsProvider = Provider.of<SettingsProvider>(context, listen: false);
+      setState(() {
+        _delayAlertsEnabled = settingsProvider.delayAlertsEnabled;
+        _selectedLanguage = settingsProvider.language;
+      });
+    });
   }
 
   @override
@@ -32,16 +36,15 @@ class _SettingsPageState extends State<SettingsPage> {
     
     return Scaffold(
       appBar: AppBar(
-        title: Text('Settings'),
+        title: const Text('Settings'),
         centerTitle: true,
       ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          // قسم الإشعارات
           _buildSectionHeader('Notifications'),
           SwitchListTile(
-            title: Text('Delay Alerts'),
+            title: const Text('Delay Alerts'),
             value: _delayAlertsEnabled,
             onChanged: (value) async {
               setState(() => _delayAlertsEnabled = value);
@@ -50,10 +53,9 @@ class _SettingsPageState extends State<SettingsPage> {
             },
           ),
 
-          // قسم اللغة
           _buildSectionHeader('Language'),
           ListTile(
-            title: Text('Language'),
+            title: const Text('Language'),
             trailing: DropdownButton<String>(
               value: _selectedLanguage,
               items: [
@@ -80,18 +82,17 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
 
-          // قسم الحساب
           _buildSectionHeader('Account'),
           ListTile(
             leading: const Icon(Icons.exit_to_app),
-            title: Text('Logout'),
+            title: const Text('Logout'),
             onTap: () => _logout(context),
           ),
           ListTile(
             leading: const Icon(Icons.delete, color: Colors.red),
-            title: Text(
+            title: const Text(
               'Delete Account',
-              style: const TextStyle(color: Colors.red),
+              style: TextStyle(color: Colors.red),
             ),
             onTap: () => _showDeleteAccountDialog(context),
           ),
@@ -159,9 +160,9 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       await supabase.auth.signOut();
       if (!mounted) return;
-      Navigator.pushAndRemoveUntil(
+      await Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (context) => const LoginPage()),
+        MaterialPageRoute(builder: (_) => const LoginPage()),
         (route) => false,
       );
     } catch (e) {
@@ -175,22 +176,22 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _showDeleteAccountDialog(BuildContext context) async {
     return showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text('Confirm Deletion'),
-        content: Text('Are you sure you want to delete your account? This action cannot be undone.'),
+      builder: (_) => AlertDialog(
+        title: const Text('Confirm Deletion'),
+        content: const Text('Are you sure you want to delete your account? This action cannot be undone.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: Text('Cancel'),
+            child: const Text('Cancel'),
           ),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
               await _deleteAccount(context);
             },
-            child: Text(
+            child: const Text(
               'Delete',
-              style: const TextStyle(color: Colors.red),
+              style: TextStyle(color: Colors.red),
             ),
           ),
         ],
@@ -212,8 +213,9 @@ class _SettingsPageState extends State<SettingsPage> {
         await supabase.auth.signOut();
         
         if (!mounted) return;
-        Navigator.of(context).pushAndRemoveUntil(
-          MaterialPageRoute(builder: (context) => const LoginPage()),
+        await Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const LoginPage()),
           (route) => false,
         );
       }

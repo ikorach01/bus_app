@@ -1,20 +1,23 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
+/// Provider class that manages application settings and preferences
 class SettingsProvider with ChangeNotifier {
   bool _darkMode = false;
   bool _delayAlertsEnabled = true;
   String _language = 'en';
   bool _notificationsEnabled = true;
-  String _hereApiKey = "0mLFOCbR4d37yR14JI6y1QL3kztkWhKff3tjn95qc8U"; // Store API key
+  late final String _hereApiKey;
 
   bool get darkMode => _darkMode;
   bool get delayAlertsEnabled => _delayAlertsEnabled;
   String get language => _language;
   bool get notificationsEnabled => _notificationsEnabled;
-  String get hereApiKey => _hereApiKey; // Getter for API key
+  String get hereApiKey => _hereApiKey;
 
   SettingsProvider() {
+    _hereApiKey = dotenv.env['HERE_API_KEY'] ?? '';
     _loadSettings();
   }
 
