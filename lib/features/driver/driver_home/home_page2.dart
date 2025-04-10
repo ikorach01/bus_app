@@ -21,102 +21,12 @@ class _HomePage2State extends State<HomePage2> {
   late MapController _mapController;
   final TextEditingController _departureController = TextEditingController();
   final TextEditingController _arrivalController = TextEditingController();
-  bool _showDepartureSuggestions = false;
-  bool _showArrivalSuggestions = false;
-
-  // List of municipalities in Adrar
-  final List<Map<String, dynamic>> _municipalities = [
-    {
-      'name': 'Adrar',
-      'coordinates': LatLng(27.8742, -0.2891),
-    },
-    {
-      'name': 'Reggane',
-      'coordinates': LatLng(26.7167, -0.1667),
-    },
-    {
-      'name': 'Aoulef',
-      'coordinates': LatLng(26.9667, 1.0833),
-    },
-    {
-      'name': 'Timimoun',
-      'coordinates': LatLng(29.2639, 0.2306),
-    },
-    {
-      'name': 'Zaouiet Kounta',
-      'coordinates': LatLng(27.2333, -0.2500),
-    },
-    {
-      'name': 'Tsabit',
-      'coordinates': LatLng(28.3500, -0.2167),
-    },
-    {
-      'name': 'Charouine',
-      'coordinates': LatLng(29.0167, -0.2667),
-    },
-    {
-      'name': 'Fenoughil',
-      'coordinates': LatLng(27.7333, -0.2333),
-    },
-  ];
-
-  List<Map<String, dynamic>> _filteredMunicipalities = [];
 
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
     _getUserLocation();
-    _departureController.addListener(_onDepartureChanged);
-    _arrivalController.addListener(_onArrivalChanged);
-  }
-
-  void _onDepartureChanged() {
-    setState(() {
-      if (_departureController.text.isEmpty) {
-        _filteredMunicipalities = [];
-        _showDepartureSuggestions = false;
-      } else {
-        _filteredMunicipalities = _municipalities
-            .where((municipality) => municipality['name']
-                .toLowerCase()
-                .contains(_departureController.text.toLowerCase()))
-            .toList();
-        _showDepartureSuggestions = true;
-      }
-    });
-  }
-
-  void _onArrivalChanged() {
-    setState(() {
-      if (_arrivalController.text.isEmpty) {
-        _filteredMunicipalities = [];
-        _showArrivalSuggestions = false;
-      } else {
-        _filteredMunicipalities = _municipalities
-            .where((municipality) => municipality['name']
-                .toLowerCase()
-                .contains(_arrivalController.text.toLowerCase()))
-            .toList();
-        _showArrivalSuggestions = true;
-      }
-    });
-  }
-
-  void _selectMunicipality(Map<String, dynamic> municipality, bool isDeparture) {
-    setState(() {
-      if (isDeparture) {
-        _departureController.text = municipality['name'];
-        _showDepartureSuggestions = false;
-      } else {
-        _arrivalController.text = municipality['name'];
-        _showArrivalSuggestions = false;
-      }
-      
-      // Update map marker
-      _destinationLocation = municipality['coordinates'];
-      _mapController.move(municipality['coordinates'], 14.0);
-    });
   }
 
   Future<void> _getUserLocation() async {
@@ -168,7 +78,12 @@ class _HomePage2State extends State<HomePage2> {
     
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
-        _departureController.text = result['name'];
+        String locationInfo = result['name'];
+        if (result['mairie'] != null && result['mairie'].toString().isNotEmpty) {
+          locationInfo += ' (${result['mairie']})';
+        }
+        _departureController.text = locationInfo;
+        
         // If you have coordinates, you can set them here
         if (result['latitude'] != null && result['longitude'] != null) {
           final lat = double.parse(result['latitude'].toString());
@@ -187,7 +102,12 @@ class _HomePage2State extends State<HomePage2> {
     
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
-        _arrivalController.text = result['name'];
+        String locationInfo = result['name'];
+        if (result['mairie'] != null && result['mairie'].toString().isNotEmpty) {
+          locationInfo += ' (${result['mairie']})';
+        }
+        _arrivalController.text = locationInfo;
+        
         // If you have coordinates, you can set them here
         if (result['latitude'] != null && result['longitude'] != null) {
           final lat = double.parse(result['latitude'].toString());
@@ -302,64 +222,6 @@ class _HomePage2State extends State<HomePage2> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                // Suggestions for Departure
-                if (_showDepartureSuggestions && _filteredMunicipalities.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, -5),
-                        ),
-                      ],
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      itemCount: _filteredMunicipalities.length,
-                      itemBuilder: (context, index) {
-                        final municipality = _filteredMunicipalities[index];
-                        return ListTile(
-                          title: Text(municipality['name']),
-                          onTap: () => _selectMunicipality(municipality, true),
-                        );
-                      },
-                    ),
-                  ),
-
-                // Suggestions for Arrival
-                if (_showArrivalSuggestions && _filteredMunicipalities.isNotEmpty)
-                  Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 24),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.1),
-                          blurRadius: 10,
-                          offset: const Offset(0, -5),
-                        ),
-                      ],
-                    ),
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      padding: EdgeInsets.zero,
-                      itemCount: _filteredMunicipalities.length,
-                      itemBuilder: (context, index) {
-                        final municipality = _filteredMunicipalities[index];
-                        return ListTile(
-                          title: Text(municipality['name']),
-                          onTap: () => _selectMunicipality(municipality, false),
-                        );
-                      },
-                    ),
-                  ),
-
                 // Input Form
                 Container(
                   padding: const EdgeInsets.all(24),

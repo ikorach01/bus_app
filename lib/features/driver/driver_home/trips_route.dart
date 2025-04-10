@@ -6,6 +6,7 @@ import 'dart:math';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'realtime_provider.dart';
+import 'home_page2.dart';
 
 class TripsRoute extends StatefulWidget {
   final String departure;
@@ -148,17 +149,24 @@ class _TripsRouteState extends State<TripsRoute> {
 
   Future<void> _fetchStationIds() async {
     try {
+      // Extract the station names without the municipality part
+      String departureName = _extractStationNameOnly(widget.departure);
+      String arrivalName = _extractStationNameOnly(widget.arrival);
+      
+      print('Searching for departure station: $departureName');
+      print('Searching for arrival station: $arrivalName');
+      
       // Get station IDs from the stations table
       final departureStation = await Supabase.instance.client
           .from('stations')
           .select('id')
-          .eq('name', widget.departure)
+          .ilike('name', '%$departureName%')
           .maybeSingle();
       
       final arrivalStation = await Supabase.instance.client
           .from('stations')
           .select('id')
-          .eq('name', widget.arrival)
+          .ilike('name', '%$arrivalName%')
           .maybeSingle();
       
       setState(() {
@@ -170,54 +178,93 @@ class _TripsRouteState extends State<TripsRoute> {
       
       // If stations not found, create them
       if (_startStationId == null || _endStationId == null) {
-        await _createMissingStations();
+        await _createMissingStations(departureName, arrivalName);
       }
     } catch (e) {
       print('Error fetching station IDs: $e');
     }
   }
 
-  Future<void> _createMissingStations() async {
+  // Helper method to extract just the station name without the municipality
+  String _extractStationNameOnly(String fullName) {
+    // Check if the name contains a parenthesis
+    final regex = RegExp(r'(.*?)\s*\(.*\)');
+    final match = regex.firstMatch(fullName);
+    
+    if (match != null && match.groupCount >= 1) {
+      return match.group(1)?.trim() ?? fullName;
+    }
+    
+    return fullName;
+  }
+
+  Future<void> _createMissingStations(String departureName, String arrivalName) async {
     try {
       // Create stations if they don't exist
-      if (_startStationId == null && _municipalityCoordinates.containsKey(widget.departure)) {
-        final coords = _municipalityCoordinates[widget.departure]!;
-        final response = await Supabase.instance.client
-            .from('stations')
-            .insert({
-              'name': widget.departure,
-              'latitude': coords.latitude,
-              'longitude': coords.longitude,
-            })
-            .select()
-            .single();
+      if (_startStationId == null) {
+        // Extract municipality from the full name
+        final departureCoords = _extractCoordinatesFromText(widget.departure);
+        final departureMunicipality = _extractMunicipalityFromText(widget.departure);
         
-        setState(() {
-          _startStationId = response['id'];
-        });
-        print('Created start station with ID: $_startStationId');
+        if (departureCoords != null) {
+          final response = await Supabase.instance.client
+              .from('stations')
+              .insert({
+                'name': departureName,
+                'latitude': departureCoords.latitude.toString(),
+                'longitude': departureCoords.longitude.toString(),
+                'mairie': departureMunicipality,
+              })
+              .select()
+              .single();
+          
+          setState(() {
+            _startStationId = response['id'];
+          });
+          print('Created start station with ID: $_startStationId');
+        }
       }
 
-      if (_endStationId == null && _municipalityCoordinates.containsKey(widget.arrival)) {
-        final coords = _municipalityCoordinates[widget.arrival]!;
-        final response = await Supabase.instance.client
-            .from('stations')
-            .insert({
-              'name': widget.arrival,
-              'latitude': coords.latitude,
-              'longitude': coords.longitude,
-            })
-            .select()
-            .single();
+      if (_endStationId == null) {
+        // Extract municipality from the full name
+        final arrivalCoords = _extractCoordinatesFromText(widget.arrival);
+        final arrivalMunicipality = _extractMunicipalityFromText(widget.arrival);
         
-        setState(() {
-          _endStationId = response['id'];
-        });
-        print('Created end station with ID: $_endStationId');
+        if (arrivalCoords != null) {
+          final response = await Supabase.instance.client
+              .from('stations')
+              .insert({
+                'name': arrivalName,
+                'latitude': arrivalCoords.latitude.toString(),
+                'longitude': arrivalCoords.longitude.toString(),
+                'mairie': arrivalMunicipality,
+              })
+              .select()
+              .single();
+          
+          setState(() {
+            _endStationId = response['id'];
+          });
+          print('Created end station with ID: $_endStationId');
+        }
       }
     } catch (e) {
       print('Error creating stations: $e');
     }
+  }
+
+  // Helper method to extract municipality from text
+  String? _extractMunicipalityFromText(String text) {
+    // Check if it's in format "Station Name (Municipality)"
+    final regex = RegExp(r'.*\((.*)\)');
+    final match = regex.firstMatch(text);
+    
+    if (match != null && match.groupCount >= 1) {
+      return match.group(1)?.trim();
+    }
+    
+    // If not in parentheses format, return the original text as it might be just the municipality
+    return text;
   }
 
   Future<void> _initializeLocationTracking() async {
@@ -279,8 +326,8 @@ class _TripsRouteState extends State<TripsRoute> {
     if (!mounted) return;
     
     // Get coordinates for departure and arrival
-    final departureCoords = _municipalityCoordinates[widget.departure];
-    final arrivalCoords = _municipalityCoordinates[widget.arrival];
+    final departureCoords = _extractCoordinatesFromText(widget.departure);
+    final arrivalCoords = _extractCoordinatesFromText(widget.arrival);
 
     if (departureCoords != null && arrivalCoords != null) {
       setState(() {
@@ -302,7 +349,36 @@ class _TripsRouteState extends State<TripsRoute> {
         debugPrint('Error moving map: $e');
         // The map might not be ready yet, which is fine
       }
+    } else {
+      // If we can't extract coordinates, set default location
+      print('Could not extract coordinates from departure: ${widget.departure} or arrival: ${widget.arrival}');
+      setState(() {
+        // Set a default point to avoid empty route points
+        _routePoints = [LatLng(27.8742, -0.2891)]; // Default to Adrar coordinates
+      });
     }
+  }
+
+  // Helper method to extract coordinates from text that might contain municipality name
+  LatLng? _extractCoordinatesFromText(String text) {
+    // First check if it's a direct municipality name
+    if (_municipalityCoordinates.containsKey(text)) {
+      return _municipalityCoordinates[text];
+    }
+    
+    // If not, it might be in format "Station Name (Municipality)"
+    final regex = RegExp(r'(.*)\s*\((.*)\)');
+    final match = regex.firstMatch(text);
+    
+    if (match != null && match.groupCount >= 2) {
+      final municipality = match.group(2)?.trim();
+      if (municipality != null && _municipalityCoordinates.containsKey(municipality)) {
+        return _municipalityCoordinates[municipality];
+      }
+    }
+    
+    // If all else fails, return null
+    return null;
   }
 
   double _calculateDistance(LatLng point1, LatLng point2) {
@@ -369,8 +445,18 @@ class _TripsRouteState extends State<TripsRoute> {
     
     // If we reach here, all required information is available
     try {
+      print('All required information is available:');
+      print('Driver ID: $_driverId');
+      print('Bus ID: $_busId');
+      print('Start Station ID: $_startStationId');
+      print('End Station ID: $_endStationId');
+      print('Departure: ${widget.departure}');
+      print('Arrival: ${widget.arrival}');
+      
       // Get the realtime provider
       final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+      
+      print('Calling realtimeProvider.startRoute...');
       
       // Use the actual station names instead of IDs for better user experience
       final success = await realtimeProvider.startRoute(
@@ -379,6 +465,8 @@ class _TripsRouteState extends State<TripsRoute> {
         widget.departure,
         widget.arrival,
       );
+      
+      print('startRoute result: $success');
       
       if (success) {
         setState(() {
@@ -405,6 +493,7 @@ class _TripsRouteState extends State<TripsRoute> {
       }
     } catch (e) {
       print('Error starting trip: $e');
+      print('Stack trace: ${StackTrace.current}');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error starting trip: $e'),
@@ -430,27 +519,46 @@ class _TripsRouteState extends State<TripsRoute> {
     );
   }
 
-  void _stopTrip() async {
-    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
-    
-    final success = await realtimeProvider.endRoute();
-    
-    if (success) {
-      setState(() {
-        _isTripStarted = false;
-        _isTracking = false;
-      });
+  Future<void> _stopTrip() async {
+    try {
+      // Get the realtime provider
+      final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
       
+      print('Ending trip...');
+      
+      // Call the endRoute method in the realtime provider
+      final success = await realtimeProvider.endRoute();
+      
+      print('endRoute result: $success');
+      
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Trip ended successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+        
+        // Navigate back to the home page
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (context) => const HomePage2(),
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to end trip'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } catch (e) {
+      print('Error ending trip: $e');
+      print('Stack trace: ${StackTrace.current}');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Trip ended successfully'),
-          backgroundColor: Colors.green,
-        ),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to end trip'),
+        SnackBar(
+          content: Text('Error ending trip: $e'),
           backgroundColor: Colors.red,
         ),
       );
@@ -490,11 +598,12 @@ class _TripsRouteState extends State<TripsRoute> {
                     ),
                     PolylineLayer(
                       polylines: [
-                        Polyline(
-                          points: _routePoints,
-                          strokeWidth: 5.0,
-                          color: const Color(0xFF2A52C9),
-                        ),
+                        if (_routePoints.isNotEmpty) // Only add polyline if there are points
+                          Polyline(
+                            points: _routePoints,
+                            strokeWidth: 5.0,
+                            color: const Color(0xFF2A52C9),
+                          ),
                       ],
                     ),
                     MarkerLayer(

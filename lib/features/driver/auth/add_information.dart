@@ -73,15 +73,30 @@ class _AddInformationPageState extends State<AddInformationPage> {
     try {
       // Get the current user
       final user = supabase.auth.currentUser;
-      if (user == null) {
+      if (user == null) throw Exception('User not authenticated');
+
+      // Ensure user is registered in user_profiles first
+      try {
+        final profile = await supabase
+            .from('user_profiles')
+            .select()
+            .eq('id', user.id)
+            .maybeSingle();
+
+        if (profile == null) {
+          await supabase.from('user_profiles').insert({
+            'id': user.id,
+            'email': user.email ?? '',
+            'phone': _driverData['phone'] ?? '',
+            'user_type': 'driver'
+          });
+        }
+      } catch (e) {
         Navigator.pop(context); // Close loading dialog
-        _showErrorMessage('You must be logged in to register as a driver.');
+        _showErrorMessage('Error creating user profile: ${e.toString()}');
         return;
       }
 
-      // Print user ID for debugging
-      print('Current user ID: ${user.id}');
-      
       // Check if we have all required fields
       bool isComplete = _validateDriverData();
       
@@ -149,21 +164,23 @@ class _AddInformationPageState extends State<AddInformationPage> {
         driverData['license_number'] = _driverData['license_number'].toString();
       }
       
-      // Handle binary data for license_image_front
       if (_driverData.containsKey('license_image_front') && _driverData['license_image_front'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
         if (_driverData['license_image_front'] is List) {
-          // Convert to base64 string for Supabase bytea field
-          final bytes = List<int>.from(_driverData['license_image_front']);
-          driverData['license_image_front'] = base64Encode(bytes);
+          // Convert to base64 string if it's a list of bytes
+          driverData['license_image_front'] = base64Encode(List<int>.from(_driverData['license_image_front']));
+        } else {
+          driverData['license_image_front'] = _driverData['license_image_front'].toString();
         }
       }
       
-      // Handle binary data for license_image_back
       if (_driverData.containsKey('license_image_back') && _driverData['license_image_back'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
         if (_driverData['license_image_back'] is List) {
-          // Convert to base64 string for Supabase bytea field
-          final bytes = List<int>.from(_driverData['license_image_back']);
-          driverData['license_image_back'] = base64Encode(bytes);
+          // Convert to base64 string if it's a list of bytes
+          driverData['license_image_back'] = base64Encode(List<int>.from(_driverData['license_image_back']));
+        } else {
+          driverData['license_image_back'] = _driverData['license_image_back'].toString();
         }
       }
       
@@ -175,21 +192,23 @@ class _AddInformationPageState extends State<AddInformationPage> {
         driverData['grey_card_number'] = _driverData['grey_card_number'].toString();
       }
       
-      // Handle binary data for grey_card_image_front
       if (_driverData.containsKey('grey_card_image_front') && _driverData['grey_card_image_front'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
         if (_driverData['grey_card_image_front'] is List) {
-          // Convert to base64 string for Supabase bytea field
-          final bytes = List<int>.from(_driverData['grey_card_image_front']);
-          driverData['grey_card_image_front'] = base64Encode(bytes);
+          // Convert to base64 string if it's a list of bytes
+          driverData['grey_card_image_front'] = base64Encode(List<int>.from(_driverData['grey_card_image_front']));
+        } else {
+          driverData['grey_card_image_front'] = _driverData['grey_card_image_front'].toString();
         }
       }
       
-      // Handle binary data for grey_card_image_back
       if (_driverData.containsKey('grey_card_image_back') && _driverData['grey_card_image_back'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
         if (_driverData['grey_card_image_back'] is List) {
-          // Convert to base64 string for Supabase bytea field
-          final bytes = List<int>.from(_driverData['grey_card_image_back']);
-          driverData['grey_card_image_back'] = base64Encode(bytes);
+          // Convert to base64 string if it's a list of bytes
+          driverData['grey_card_image_back'] = base64Encode(List<int>.from(_driverData['grey_card_image_back']));
+        } else {
+          driverData['grey_card_image_back'] = _driverData['grey_card_image_back'].toString();
         }
       }
       
@@ -197,33 +216,29 @@ class _AddInformationPageState extends State<AddInformationPage> {
         driverData['grey_card_expiration'] = formattedGreyCardExp;
       }
       
-      // Extract vehicle and bus information
-      String? vehicleRegistrationPlate;
-      String? busName;
-      List<int>? busPhoto;
-      
       if (_driverData.containsKey('vehicle_registration_plate') && _driverData['vehicle_registration_plate'] != null) {
-        vehicleRegistrationPlate = _driverData['vehicle_registration_plate'].toString();
-        driverData['vehicle_registration_plate'] = vehicleRegistrationPlate;
+        driverData['vehicle_registration_plate'] = _driverData['vehicle_registration_plate'].toString();
       }
       
       if (_driverData.containsKey('bus_name') && _driverData['bus_name'] != null) {
-        busName = _driverData['bus_name'].toString();
-        driverData['bus_name'] = busName;
+        driverData['bus_name'] = _driverData['bus_name'].toString();
       }
       
-      // Handle bus photo binary data
       if (_driverData.containsKey('bus_image') && _driverData['bus_image'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
         if (_driverData['bus_image'] is List) {
-          final bytes = List<int>.from(_driverData['bus_image']);
-          busPhoto = bytes;
-          driverData['bus_photo'] = base64Encode(bytes);
+          // Convert to base64 string for database
+          driverData['bus_photo'] = base64Encode(List<int>.from(_driverData['bus_image']));
+        } else {
+          driverData['bus_photo'] = _driverData['bus_image'].toString();
         }
       } else if (_driverData.containsKey('bus_photo') && _driverData['bus_photo'] != null) {
+        // Handle image data properly - it might be a List<int> or Uint8List
         if (_driverData['bus_photo'] is List) {
-          final bytes = List<int>.from(_driverData['bus_photo']);
-          busPhoto = bytes;
-          driverData['bus_photo'] = base64Encode(bytes);
+          // Convert to base64 string for database
+          driverData['bus_photo'] = base64Encode(List<int>.from(_driverData['bus_photo']));
+        } else {
+          driverData['bus_photo'] = _driverData['bus_photo'].toString();
         }
       }
       
@@ -231,52 +246,104 @@ class _AddInformationPageState extends State<AddInformationPage> {
         driverData['email_driver'] = _driverData['email_driver'].toString();
       }
 
-      print('Attempting to insert driver data with ID: ${driverData['id']}');
-      
+      // Insert data into drivers table using the authenticated user's context
       try {
-        // Step 1: Insert data into drivers table
-        await supabase.from('drivers').insert(driverData);
-        print('Driver data inserted successfully');
+        // Step 1: Check if driver already exists in the database
+        final existingDriverResponse = await supabase
+            .from('drivers')
+            .select('id')
+            .eq('id', user.id)
+            .maybeSingle();
         
-        // Step 2: Create a bus record in the buses table with the same vehicle_registration_plate
-        if (vehicleRegistrationPlate != null) {
-          final busData = {
-            'vehicle_registration_plate': vehicleRegistrationPlate,
-            'created_at': DateTime.now().toIso8601String(),
-          };
+        final driverExists = existingDriverResponse != null;
+        
+        // Step 2: Insert or update driver record with vehicle information
+        if (driverExists) {
+          // Update existing driver with vehicle information
+          await supabase
+              .from('drivers')
+              .update({
+                'first_name': driverData['first_name'],
+                'last_name': driverData['last_name'],
+                'date_of_birth': driverData['date_of_birth'],
+                'license_number': driverData['license_number'],
+                'license_image_front': driverData['license_image_front'],
+                'license_image_back': driverData['license_image_back'],
+                'license_expiration': driverData['license_expiration'],
+                'grey_card_number': driverData['grey_card_number'],
+                'grey_card_image_front': driverData['grey_card_image_front'],
+                'grey_card_image_back': driverData['grey_card_image_back'],
+                'grey_card_expiration': driverData['grey_card_expiration'],
+                'vehicle_registration_plate': driverData['vehicle_registration_plate'],
+                'bus_name': driverData['bus_name'],
+                'bus_photo': driverData['bus_photo'],
+                'email_driver': driverData['email_driver'],
+              })
+              .eq('id', user.id);
           
-          if (busName != null) {
-            busData['bus_name'] = busName;
-          }
+          print('Updated existing driver record');
+        } else {
+          // Insert new driver record
+          await supabase.from('drivers').insert(driverData);
+          print('Inserted new driver record');
+        }
+        
+        // Step 3: Handle the bus record creation/update
+        try {
+          // Get the vehicle registration plate from the driver data
+          final String registrationPlate = driverData['vehicle_registration_plate'].toString();
           
-          if (busPhoto != null) {
-            busData['bus_photo'] = base64Encode(busPhoto);
-          }
+          // First, try to find if a bus with this registration plate exists
+          final busResponse = await supabase
+              .from('buses')
+              .select()
+              .eq('vehicle_registration_plate', registrationPlate);
           
-          try {
-            // Insert bus data
-            final busResponse = await supabase
+          String? busId;
+          
+          if (busResponse.isNotEmpty) {
+            // Bus exists, update it
+            busId = busResponse[0]['id'].toString();
+            await supabase
+                .from('buses')
+                .update({
+                  'bus_name': driverData['bus_name'],
+                  'bus_photo': driverData['bus_photo'],
+                })
+                .eq('id', busId);
+            
+            print('Updated existing bus with ID: $busId');
+          } else {
+            // Create new bus record
+            final busData = {
+              'bus_name': driverData['bus_name'],
+              'vehicle_registration_plate': registrationPlate,
+              'bus_photo': driverData['bus_photo'],
+            };
+            
+            final insertResponse = await supabase
                 .from('buses')
                 .insert(busData)
-                .select('id')
-                .single();
-                
-            print('Bus data inserted successfully: ${busResponse['id']}');
-                
-            // Step 3: Update the driver record with the bus_id
-            if (busResponse['id'] != null) {
-              final busId = busResponse['id'];
-              await supabase
-                  .from('drivers')
-                  .update({'bus_id': busId})
-                  .eq('id', user.id);
-                  
-              print('Updated driver with bus ID: $busId');
+                .select();
+            
+            if (insertResponse.isNotEmpty) {
+              busId = insertResponse[0]['id'].toString();
+              print('Created new bus with ID: $busId');
             }
-          } catch (e) {
-            print('Error inserting bus data: $e');
-            // Continue even if bus insertion fails
           }
+          
+          // Step 4: Update driver with bus_id
+          if (busId != null) {
+            await supabase
+                .from('drivers')
+                .update({'bus_id': busId})
+                .eq('id', user.id);
+            
+            print('Updated driver with bus_id: $busId');
+          }
+        } catch (e) {
+          print('Error handling bus data: $e');
+          // Continue with the rest of the process even if bus handling fails
         }
         
         // Clear saved data after successful submission
@@ -319,8 +386,8 @@ class _AddInformationPageState extends State<AddInformationPage> {
           );
         }
       } catch (e) {
-        print('Error in database operations: $e');
-        Navigator.pop(context); // Close loading dialog
+        // Close loading dialog
+        Navigator.pop(context);
         
         // Determine the specific error
         String errorMessage = 'An error occurred during registration.';
@@ -332,9 +399,10 @@ class _AddInformationPageState extends State<AddInformationPage> {
         } else if (e.toString().contains('violates not-null constraint')) {
           errorMessage = 'Missing required information. Please complete all sections.';
         } else if (e.toString().contains('permission denied')) {
-          errorMessage = 'You do not have permission to register as a driver. Please check your authentication.';
-        } else if (e.toString().contains('violates row-level security policy')) {
-          errorMessage = 'Security policy violation. Please contact support.';
+          errorMessage = 'You do not have permission to register as a driver.';
+          print('Permission denied error details: $e');
+        } else if (e.toString().contains('network')) {
+          errorMessage = 'Network error. Please check your internet connection.';
         }
         
         _showErrorMessage('$errorMessage\n\nDetails: ${e.toString()}');
@@ -342,23 +410,8 @@ class _AddInformationPageState extends State<AddInformationPage> {
     } catch (e) {
       // Close loading dialog
       Navigator.pop(context);
-      
-      // Determine the specific error
-      String errorMessage = 'An error occurred during registration.';
-      
-      if (e.toString().contains('duplicate key')) {
-        errorMessage = 'A driver with this information already exists.';
-      } else if (e.toString().contains('violates foreign key constraint')) {
-        errorMessage = 'Invalid reference to another table. Please check your data.';
-      } else if (e.toString().contains('violates not-null constraint')) {
-        errorMessage = 'Missing required information. Please complete all sections.';
-      } else if (e.toString().contains('permission denied')) {
-        errorMessage = 'You do not have permission to register as a driver. Please check your authentication.';
-      } else if (e.toString().contains('violates row-level security policy')) {
-        errorMessage = 'Security policy violation. Please contact support.';
-      }
-      
-      _showErrorMessage('$errorMessage\n\nDetails: ${e.toString()}');
+      print('Error: $e');
+      _showErrorMessage('حدث خطأ: ${e.toString()}');
     }
   }
   

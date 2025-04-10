@@ -64,50 +64,238 @@ class RealtimeProvider extends ChangeNotifier {
   // Start a new route for the driver
   Future<bool> startRoute(String driverId, String busId, String startStation, String endStation) async {
     try {
+      print('Starting route with driver ID: $driverId, bus ID: $busId');
+      print('Original start station: $startStation');
+      print('Original end station: $endStation');
+      
       _busId = busId;
       
-      // Get station IDs from the stations table
+      // Extract the station names without the municipality part
+      String departureStationName = _extractStationNameOnly(startStation);
+      String arrivalStationName = _extractStationNameOnly(endStation);
+      
+      print('Extracted departure station name: $departureStationName');
+      print('Extracted arrival station name: $arrivalStationName');
+      
+      // Get station IDs from the stations table using partial matching
       final departureStation = await _supabase
           .from('stations')
-          .select('id')
-          .eq('name', startStation)
+          .select('id, name')
+          .ilike('name', '%$departureStationName%')
           .maybeSingle();
       
       final arrivalStation = await _supabase
           .from('stations')
-          .select('id')
-          .eq('name', endStation)
+          .select('id, name')
+          .ilike('name', '%$arrivalStationName%')
           .maybeSingle();
       
+      print('Found departure station: ${departureStation != null ? departureStation : 'null'}');
+      print('Found arrival station: ${arrivalStation != null ? arrivalStation : 'null'}');
+      
+      if (departureStation == null || arrivalStation == null) {
+        print('One or both stations not found. Creating missing stations...');
+        
+        // Try to create the stations if they don't exist
+        if (departureStation == null) {
+          try {
+            final newDepartureStation = await _supabase
+                .from('stations')
+                .insert({
+                  'name': departureStationName,
+                  'latitude': '0', // Default values
+                  'longitude': '0',
+                  'mairie': _extractMunicipalityFromText(startStation),
+                })
+                .select()
+                .single();
+            
+            print('Created new departure station: $newDepartureStation');
+          } catch (e) {
+            print('Error creating departure station: $e');
+          }
+        }
+        
+        if (arrivalStation == null) {
+          try {
+            final newArrivalStation = await _supabase
+                .from('stations')
+                .insert({
+                  'name': arrivalStationName,
+                  'latitude': '0', // Default values
+                  'longitude': '0',
+                  'mairie': _extractMunicipalityFromText(endStation),
+                })
+                .select()
+                .single();
+            
+            print('Created new arrival station: $newArrivalStation');
+          } catch (e) {
+            print('Error creating arrival station: $e');
+          }
+        }
+        
+        // Try to get the stations again
+        final updatedDepartureStation = await _supabase
+            .from('stations')
+            .select('id, name')
+            .ilike('name', '%$departureStationName%')
+            .maybeSingle();
+        
+        final updatedArrivalStation = await _supabase
+            .from('stations')
+            .select('id, name')
+            .ilike('name', '%$arrivalStationName%')
+            .maybeSingle();
+        
+        print('Updated departure station: ${updatedDepartureStation != null ? updatedDepartureStation : 'null'}');
+        print('Updated arrival station: ${updatedArrivalStation != null ? updatedArrivalStation : 'null'}');
+      }
+      
       // Insert new route into driver_routes table
-      final response = await _supabase
-          .from('driver_routes')
-          .insert({
+      print('Inserting new route into driver_routes table...');
+      
+      // Try with minimal required fields first
+      try {
+        print('Trying simplified insert with minimal fields...');
+        final response = await _supabase
+            .from('driver_routes')
+            .insert({
+              'driver_id': driverId,
+              'start_station': departureStationName,
+              'end_station': arrivalStationName,
+              'start_time': DateTime.now().toUtc().toIso8601String(),
+            })
+            .select()
+            .single();
+        
+        print('Route created successfully: $response');
+        _currentRouteId = response['id'] as int;
+        
+        // Start location tracking
+        _startLocationTracking();
+        
+        notifyListeners();
+        return true;
+      } catch (e) {
+        print('ERROR DETAILS (simplified insert): ${e.toString()}');
+        
+        // Try to get more details about the error
+        if (e is PostgrestException) {
+          print('PostgrestException details:');
+          print('Code: ${e.code}');
+          print('Message: ${e.message}');
+          print('Details: ${e.details}');
+          print('Hint: ${e.hint}');
+        }
+        
+        print('Error with simplified insert into driver_routes: $e');
+        print('Stack trace: ${StackTrace.current}');
+        
+        // Try with all fields
+        print('Trying full insert with all fields...');
+        try {
+          // Prepare the data for the insert
+          final routeData = {
             'driver_id': driverId,
             'bus_id': busId,
-            'start_station': startStation,
-            'end_station': endStation,
-            'start_station_id': departureStation != null ? departureStation['id'] : null,
-            'end_station_id': arrivalStation != null ? arrivalStation['id'] : null,
+            'start_station': departureStationName,
+            'end_station': arrivalStationName,
             'start_time': DateTime.now().toUtc().toIso8601String(),
-          })
-          .select()
-          .single();
-      
-      _currentRouteId = response['id'] as int;
-      
-      // Start location tracking
-      _startLocationTracking();
-      
-      // Update bus status in buses table
-      await _updateBusStatus(endStation);
-      
-      notifyListeners();
-      return true;
+          };
+          
+          // Add station IDs if available
+          if (departureStation != null) {
+            routeData['start_station_id'] = departureStation['id'];
+          }
+          
+          if (arrivalStation != null) {
+            routeData['end_station_id'] = arrivalStation['id'];
+          }
+          
+          print('Route data to insert: $routeData');
+          
+          final response = await _supabase
+              .from('driver_routes')
+              .insert(routeData)
+              .select()
+              .single();
+          
+          print('Route created successfully with full data: $response');
+          _currentRouteId = response['id'] as int;
+          
+          // Start location tracking
+          _startLocationTracking();
+          
+          notifyListeners();
+          return true;
+        } catch (e2) {
+          print('ERROR DETAILS (full insert): ${e2.toString()}');
+          
+          // Try to get more details about the error
+          if (e2 is PostgrestException) {
+            print('PostgrestException details:');
+            print('Code: ${e2.code}');
+            print('Message: ${e2.message}');
+            print('Details: ${e2.details}');
+            print('Hint: ${e2.hint}');
+          }
+          
+          print('Error inserting into driver_routes: $e2');
+          print('Stack trace: ${StackTrace.current}');
+          
+          // Check if driver_routes table has the necessary RLS policy
+          print('This might be an RLS policy issue or a table structure issue.');
+          print('Please check that your driver_routes table has the following structure:');
+          print('''
+Required columns:
+- id (serial or bigint, primary key)
+- driver_id (uuid, references auth.users)
+- start_station (text)
+- end_station (text)
+- start_time (timestamp)
+
+Optional columns:
+- bus_id (uuid, references buses)
+- start_station_id (uuid, references stations)
+- end_station_id (uuid, references stations)
+- end_time (timestamp)
+          ''');
+          
+          return false;
+        }
+      }
     } catch (e) {
-      debugPrint('Error starting route: $e');
+      print('Error starting route: $e');
+      print('Stack trace: ${StackTrace.current}');
       return false;
     }
+  }
+
+  // Helper method to extract just the station name without the municipality
+  String _extractStationNameOnly(String fullName) {
+    // Check if the name contains a parenthesis
+    final regex = RegExp(r'(.*?)\s*\(.*\)');
+    final match = regex.firstMatch(fullName);
+    
+    if (match != null && match.groupCount >= 1) {
+      return match.group(1)?.trim() ?? fullName;
+    }
+    
+    return fullName;
+  }
+
+  // Helper method to extract municipality from text
+  String? _extractMunicipalityFromText(String text) {
+    // Check if it's in format "Station Name (Municipality)"
+    final regex = RegExp(r'.*\((.*)\)');
+    final match = regex.firstMatch(text);
+    
+    if (match != null && match.groupCount >= 1) {
+      return match.group(1)?.trim();
+    }
+    
+    return null;
   }
   
   // End the current route
