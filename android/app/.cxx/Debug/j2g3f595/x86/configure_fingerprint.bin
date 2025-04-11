@@ -2,6 +2,7 @@ C/C++ Structured LogX
 V
 TC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\additional_project_files.txtC
 A
+<<<<<<< HEAD
 ?com.android.build.gradle.internal.cxx.io.EncodedFileFingerPrint	ö—Š€â2 ÅÅÆ±Ü2U
 S
 QC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\android_gradle_build.json	ö—Š€â2ý ËÅÆ±Ü2Z
@@ -26,3 +27,29 @@ Q
 OC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\symbol_folder_index.txt	ø—Š€â2F ÕÅÆ±Ü2O
 M
 KC:\src\flutter\packages\flutter_tools\gradle\src\main\groovy\CMakeLists.txt	ø—Š€â2§ Ë»ˆåÖ2
+=======
+?com.android.build.gradle.internal.cxx.io.EncodedFileFingerPrint	Îºûá2 ÅÅÆ±Ü2U
+S
+QC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\android_gradle_build.json	Îºûá2ý ËÅÆ±Ü2Z
+X
+VC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\android_gradle_build_mini.json	Îºûá2Þ ÓÅÆ±Ü2G
+E
+CC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\build.ninja	Îºûá2óÏ —ÅÆ±Ü2K
+I
+GC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\build.ninja.txt	Îºûá2P
+N
+LC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\build_file_index.txt	Îºûá2K ÕÅÆ±Ü2Q
+O
+MC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\compile_commands.json	Îºûá2U
+S
+QC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\compile_commands.json.bin	Îºûá2	[
+Y
+WC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\metadata_generation_command.txt	Îºûá2
+ò ÓÅÆ±Ü2N
+L
+JC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\prefab_config.json	Îºûá2( ÔÅÆ±Ü2S
+Q
+OC:\Users\pc\bus_app\android\app\.cxx\Debug\j2g3f595\x86\symbol_folder_index.txt	Îºûá2F ÕÅÆ±Ü2O
+M
+KC:\src\flutter\packages\flutter_tools\gradle\src\main\groovy\CMakeLists.txt	Îºûá2§ Ë»ˆåÖ2
+>>>>>>> 1f027216a5c7ac7ee6624da72719f9a66b0beea9
