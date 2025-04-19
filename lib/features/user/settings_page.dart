@@ -135,9 +135,9 @@ class _SettingsPageState extends State<SettingsPage> {
     
     if (user != null) {
       final userData = user.userMetadata;
-      final role = userData?['role'] as String?;
+      final userType = userData?['user_type'] as String?;
       
-      if (role == 'driver') {
+      if (userType == 'driver') {
         // Navigate to driver home
         initialScreen = const HomePage();
       } else {

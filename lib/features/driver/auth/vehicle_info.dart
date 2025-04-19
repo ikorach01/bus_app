@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart'; // For image picking
-import 'dart:io'; // For handling file paths
-import 'package:supabase_flutter/supabase_flutter.dart'; // For Supabase integration
-import 'add_information.dart'; // Import the AddInformationPage
+import 'package:image_picker/image_picker.dart';
+import 'dart:io';
+import 'dart:typed_data';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'add_information.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 
@@ -29,23 +30,18 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
     super.initState();
     if (widget.driverData != null) {
       _driverData = Map.from(widget.driverData!);
-      
-      // Pre-fill fields if data exists
-      if (_driverData.containsKey('vehicle_registration_plate')) {
+      if (_driverData['vehicle_registration_plate'] != null) {
         registrationPlateController.text = _driverData['vehicle_registration_plate'];
       }
-      if (_driverData.containsKey('bus_name')) {
+      if (_driverData['bus_name'] != null) {
         busNameController.text = _driverData['bus_name'];
       }
     }
-    
-    // Load any saved data from SharedPreferences
     _loadSavedData();
   }
   
   @override
   void dispose() {
-    // Save data when the page is disposed
     _saveData();
     super.dispose();
   }
@@ -54,44 +50,32 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
     final prefs = await SharedPreferences.getInstance();
     final savedData = prefs.getString('driver_data');
     
-    if (savedData != null && savedData.isNotEmpty) {
+    if (savedData != null) {
       try {
-        final Map<String, dynamic> parsedData = jsonDecode(savedData);
         setState(() {
-          // Merge saved data with current data
-          _driverData.addAll(parsedData);
-          
-          // Pre-fill text fields with saved data
-          if (_driverData.containsKey('vehicle_registration_plate')) {
+          _driverData.addAll(jsonDecode(savedData));
+          if (_driverData['vehicle_registration_plate'] != null) {
             registrationPlateController.text = _driverData['vehicle_registration_plate'];
           }
-          if (_driverData.containsKey('bus_name')) {
+          if (_driverData['bus_name'] != null) {
             busNameController.text = _driverData['bus_name'];
           }
         });
       } catch (e) {
-        print('Error loading saved data: $e');
+        debugPrint('Error loading saved data: $e');
       }
     }
   }
   
   Future<void> _saveData() async {
-    // Update driver data with current field values
     _driverData['vehicle_registration_plate'] = registrationPlateController.text.trim();
     _driverData['bus_name'] = busNameController.text.trim();
     
     final prefs = await SharedPreferences.getInstance();
+    final dataToSave = Map.from(_driverData);
     
-    // We need to handle binary data for SharedPreferences
-    // Create a copy of the data without binary fields
-    final Map<String, dynamic> dataToSave = Map.from(_driverData);
-    
-    // Remove binary data as it can't be stored in SharedPreferences
-    dataToSave.remove('bus_photo');
-    dataToSave.remove('grey_card_image_front');
-    dataToSave.remove('grey_card_image_back');
-    dataToSave.remove('license_image_front');
-    dataToSave.remove('license_image_back');
+    // Remove binary data that can't be stored in SharedPreferences
+    dataToSave.removeWhere((key, value) => value is Uint8List || value is List<int>);
     
     await prefs.setString('driver_data', jsonEncode(dataToSave));
   }
@@ -99,59 +83,37 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
   Future<void> _pickImage() async {
     final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
     if (image != null) {
-      setState(() {
-        _busImage = File(image.path);
-      });
-      
-      // Read the image as bytes and store in driverData
+      setState(() => _busImage = File(image.path));
       final bytes = await _busImage!.readAsBytes();
-      // Store as bus_photo to match database field name
       _driverData['bus_photo'] = bytes;
-      
-      // Save data after picking image
-      _saveData();
+      await _saveData();
     }
   }
 
+  Uint8List? _getImageBytes() {
+    final dynamic data = _driverData['bus_photo'];
+    
+    if (data == null) return null;
+    if (data is Uint8List) return data;
+    if (data is List<int>) return Uint8List.fromList(data);
+    if (data is List<dynamic>) return Uint8List.fromList(data.cast<int>());
+    
+    return null;
+  }
+
   bool _validateInputs() {
-    // Create a specific error message based on what's missing
-    List<String> missingFields = [];
-    
     if (registrationPlateController.text.trim().isEmpty) {
-      missingFields.add('Registration plate number');
-    }
-    
-    if (busNameController.text.trim().isEmpty) {
-      missingFields.add('Bus name');
-    }
-    
-    if (_busImage == null) {
-      missingFields.add('Bus image');
-    }
-    
-    if (missingFields.isNotEmpty) {
-      String errorMessage = 'Please complete the following:';
-      for (var field in missingFields) {
-        errorMessage += '\n• $field is required';
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(errorMessage),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            },
-          ),
-        ),
-      );
+      _showErrorMessage('Registration plate number is required');
       return false;
     }
-    
+    if (busNameController.text.trim().isEmpty) {
+      _showErrorMessage('Bus name is required');
+      return false;
+    }
+    if (_busImage == null && _getImageBytes() == null) {
+      _showErrorMessage('Bus image is required');
+      return false;
+    }
     return true;
   }
 
@@ -159,14 +121,16 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
     if (!_validateInputs()) return;
 
     try {
-      // Update driver data
       _driverData['vehicle_registration_plate'] = registrationPlateController.text.trim();
       _driverData['bus_name'] = busNameController.text.trim();
       
-      // Save data before navigating
+      if (_busImage != null) {
+        final bytes = await _busImage!.readAsBytes();
+        _driverData['bus_photo'] = bytes;
+      }
+      
       await _saveData();
       
-      // Navigate back to AddInformationPage with updated data
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -174,45 +138,35 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
         ),
       );
     } catch (e) {
-      // Determine the specific error
-      String errorMessage = 'An error occurred while saving vehicle information.';
-      
-      if (e.toString().contains('network')) {
-        errorMessage = 'Network error. Please check your internet connection.';
-      }
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('$errorMessage\n\nDetails: ${e.toString()}'),
-          backgroundColor: Colors.red,
-          duration: const Duration(seconds: 5),
-          action: SnackBarAction(
-            label: 'OK',
-            textColor: Colors.white,
-            onPressed: () {
-              ScaffoldMessenger.of(context).hideCurrentSnackBar();
-            },
-          ),
-        ),
-      );
+      _showErrorMessage('Error saving vehicle information: ${e.toString()}');
     }
+  }
+
+  void _showErrorMessage(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red,
+        action: SnackBarAction(
+          label: 'OK',
+          onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final imageBytes = _getImageBytes();
+    
     return Scaffold(
       appBar: AppBar(
         title: const Text('Vehicle Information', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF9CB3F9),
-        elevation: 0,
       ),
       body: Container(
-        width: double.infinity,
-        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
-            begin: Alignment(-0.20, -0.98),
-            end: Alignment(0.2, 0.98),
             colors: [Color(0xFF9CB3F9), Color(0xFF2A52C9), Color(0xFF14202E)],
           ),
         ),
@@ -233,16 +187,17 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: Colors.white.withOpacity(0.2),
-                        width: 1,
                       ),
                     ),
-                    child: _busImage != null
+                    child: _busImage != null || imageBytes != null
                         ? ClipRRect(
                             borderRadius: BorderRadius.circular(16),
-                            child: Image.file(
-                              _busImage!,
-                              fit: BoxFit.cover,
-                            ),
+                            child: _busImage != null
+                                ? Image.file(_busImage!, fit: BoxFit.cover)
+                                : Image.memory(
+                                    imageBytes!,
+                                    fit: BoxFit.cover,
+                                  ),
                           )
                         : Column(
                             mainAxisAlignment: MainAxisAlignment.center,
@@ -307,7 +262,6 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    elevation: 2,
                   ),
                   child: const Text(
                     'Save Vehicle Information',
@@ -339,7 +293,6 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
           color: Colors.white.withOpacity(0.2),
-          width: 1,
         ),
       ),
       child: TextField(

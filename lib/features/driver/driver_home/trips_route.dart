@@ -156,22 +156,38 @@ class _TripsRouteState extends State<TripsRoute> {
       print('Searching for departure station: $departureName');
       print('Searching for arrival station: $arrivalName');
       
-      // Get station IDs from the stations table
+      // Get station IDs from the stations table using more precise matching
+      // First try exact match
       final departureStation = await Supabase.instance.client
           .from('stations')
           .select('id')
-          .ilike('name', '%$departureName%')
+          .eq('name', departureName)
+          .maybeSingle();
+          
+      // If exact match fails, try case-insensitive match
+      final departureStationResult = departureStation ?? await Supabase.instance.client
+          .from('stations')
+          .select('id')
+          .ilike('name', departureName)
           .maybeSingle();
       
+      // First try exact match
       final arrivalStation = await Supabase.instance.client
           .from('stations')
           .select('id')
-          .ilike('name', '%$arrivalName%')
+          .eq('name', arrivalName)
+          .maybeSingle();
+          
+      // If exact match fails, try case-insensitive match
+      final arrivalStationResult = arrivalStation ?? await Supabase.instance.client
+          .from('stations')
+          .select('id')
+          .ilike('name', arrivalName)
           .maybeSingle();
       
       setState(() {
-        _startStationId = departureStation != null ? departureStation['id'] : null;
-        _endStationId = arrivalStation != null ? arrivalStation['id'] : null;
+        _startStationId = departureStationResult != null ? departureStationResult['id'] : null;
+        _endStationId = arrivalStationResult != null ? arrivalStationResult['id'] : null;
       });
 
       print('Start Station ID: $_startStationId, End Station ID: $_endStationId');

@@ -67,7 +67,7 @@ class _LoginPageState extends State<LoginPage> {
           throw Exception('Please confirm your email before logging in.');
         }
 
-        // جلب بيانات المستخدم من Supabase
+        // Fetch user data from Supabase
         final session = supabase.auth.currentSession;
         final userData = session?.user.userMetadata;
         final userType = userData?['user_type'] as String?;
@@ -79,7 +79,7 @@ class _LoginPageState extends State<LoginPage> {
         await _checkAndInsertUserData(user, userType);
 
         if (userType == null) {
-          // المستخدم يسجل الدخول لأول مرة ولم يحدد نوعه بعد
+          // First-time login, user hasn't selected type yet
           print('First-time login detected. Redirecting to role selection.');
           if (!context.mounted) return;
           Navigator.pushReplacement(
@@ -93,7 +93,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
           );
         } else {
-          // المستخدم لديه نوع مسجل، الانتقال بناءً على النوع
+          // User has a registered type, redirect accordingly
           print('Existing user detected with type: $userType. Redirecting accordingly.');
           if (!context.mounted) return;
           if (userType == 'passenger') {
@@ -141,7 +141,7 @@ class _LoginPageState extends State<LoginPage> {
           emailRedirectTo: 'bus_app://auth/callback',
           data: {
             'phone': phoneController.text.trim(),
-            'user_type': null, // لم يتم تحديد النوع بعد، سيتم تحديده لاحقًا
+            'user_type': null, // Type not set yet, will be set later
           },
         );
 
@@ -176,7 +176,7 @@ class _LoginPageState extends State<LoginPage> {
           _showMessage('Registration successful! Please check your email to confirm your account.', Colors.green);
           
           setState(() {
-            isLogin = true; // التبديل إلى وضع تسجيل الدخول
+            isLogin = true; // Switch to login mode
           });
         }
       }

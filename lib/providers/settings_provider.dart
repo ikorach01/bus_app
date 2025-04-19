@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart' as dotenv;
 
 /// Provider class that manages application settings and preferences
 class SettingsProvider with ChangeNotifier {
@@ -17,7 +17,13 @@ class SettingsProvider with ChangeNotifier {
   String get hereApiKey => _hereApiKey;
 
   SettingsProvider() {
-    _hereApiKey = dotenv.env['HERE_API_KEY'] ?? '';
+    try {
+      _hereApiKey = dotenv.dotenv.env['HERE_API_KEY'] ?? '';
+    } catch (e) {
+      // Handle the case when dotenv is not initialized
+      _hereApiKey = '';
+      print('Warning: dotenv not initialized, using empty HERE_API_KEY');
+    }
     _loadSettings();
   }
 

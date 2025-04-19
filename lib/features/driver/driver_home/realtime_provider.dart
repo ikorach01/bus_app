@@ -31,8 +31,13 @@ class RealtimeProvider extends ChangeNotifier {
   bool get isRouteActive => _currentRouteId != null;
   
   RealtimeProvider() {
-    _initializeLocationTracking();
-    _listenToBusPositions();
+    try {
+      _initializeLocationTracking();
+      _listenToBusPositions();
+    } catch (e) {
+      debugPrint('Error initializing RealtimeProvider: $e');
+      // Continue without location tracking if it fails
+    }
   }
   
   // Initialize location tracking
@@ -50,12 +55,22 @@ class RealtimeProvider extends ChangeNotifier {
         if (permissionGranted != PermissionStatus.granted) return;
       }
       
-      // Enable background mode for continuous tracking
-      await _location.enableBackgroundMode(enable: true);
+      // Enable background mode for continuous tracking - skip on web platform
+      try {
+        await _location.enableBackgroundMode(enable: true);
+      } catch (e) {
+        debugPrint('Could not enable background mode, possibly on web platform: $e');
+        // Continue without background mode
+      }
       
       // Get initial location
-      _currentLocation = await _location.getLocation();
-      notifyListeners();
+      try {
+        _currentLocation = await _location.getLocation();
+        notifyListeners();
+      } catch (e) {
+        debugPrint('Could not get initial location: $e');
+        // Continue without initial location
+      }
     } catch (e) {
       debugPrint('Error initializing location: $e');
     }
@@ -244,24 +259,6 @@ class RealtimeProvider extends ChangeNotifier {
           print('Error inserting into driver_routes: $e2');
           print('Stack trace: ${StackTrace.current}');
           
-          // Check if driver_routes table has the necessary RLS policy
-          print('This might be an RLS policy issue or a table structure issue.');
-          print('Please check that your driver_routes table has the following structure:');
-          print('''
-Required columns:
-- id (serial or bigint, primary key)
-- driver_id (uuid, references auth.users)
-- start_station (text)
-- end_station (text)
-- start_time (timestamp)
-
-Optional columns:
-- bus_id (uuid, references buses)
-- start_station_id (uuid, references stations)
-- end_station_id (uuid, references stations)
-- end_time (timestamp)
-          ''');
-          
           return false;
         }
       }
@@ -354,7 +351,7 @@ Optional columns:
       await _supabase
           .from('bus_positions')
           .insert({
-            'bus_id': int.parse(_busId!),
+            'bus_id': _busId!,
             'route_id': _currentRouteId!,
             'latitude': _currentLocation!.latitude,
             'longitude': _currentLocation!.longitude,
@@ -378,7 +375,6 @@ Optional columns:
       // Calculate ETA based on distance and speed
       int etaToDestination = 15; // Default 15 minutes
       if (_currentSpeed > 0) {
-        // More sophisticated ETA calculation could be implemented here
         etaToDestination = (10 + (30 / _currentSpeed)).round();
       }
       
@@ -397,7 +393,7 @@ Optional columns:
       await _supabase
           .from('buses')
           .update(updateData)
-          .eq('id', int.parse(_busId!));
+          .eq('id', _busId!);
     } catch (e) {
       debugPrint('Error updating bus status: $e');
     }
@@ -405,18 +401,24 @@ Optional columns:
   
   // Listen to all bus positions for passenger view
   void _listenToBusPositions() {
-    _busPositionsSubscription = _supabase
-        .from('buses')
-        .stream(primaryKey: ['id'])
-        .execute()
-        .map((event) => event.map((e) => e).toList())
-        .listen((buses) {
-          _activeBuses = buses.where((bus) => 
-            bus['latitude'] != null && 
-            bus['longitude'] != null
-          ).toList();
-          notifyListeners();
-        });
+    try {
+      _busPositionsSubscription = _supabase
+          .from('buses')
+          .stream(primaryKey: ['id'])
+          .execute()
+          .map((event) => event.map((e) => e).toList())
+          .listen((buses) {
+            _activeBuses = buses.where((bus) => 
+              bus['latitude'] != null && 
+              bus['longitude'] != null
+            ).toList();
+            notifyListeners();
+          }, onError: (error) {
+            debugPrint('Error in bus positions stream: $error');
+          });
+    } catch (e) {
+      debugPrint('Error setting up bus positions stream: $e');
+    }
   }
   
   // Get driver info for a specific bus
@@ -445,9 +447,20 @@ Optional columns:
           .maybeSingle();
       
       if (response != null && response['bus_photo'] != null) {
-        // The bus_photo is stored as bytea in the database
-        final List<int> photoBytes = List<int>.from(response['bus_photo']);
-        return base64Encode(photoBytes);
+        try {
+          if (response['bus_photo'] is List) {
+            final List<int> photoBytes = List<int>.from(response['bus_photo']);
+            return base64Encode(photoBytes);
+          } else if (response['bus_photo'] is String) {
+            return response['bus_photo'];
+          } else {
+            debugPrint('Unexpected data type for bus_photo: ${response['bus_photo'].runtimeType}');
+            return null;
+          }
+        } catch (e) {
+          debugPrint('Error processing bus photo: $e');
+          return null;
+        }
       }
       return null;
     } catch (e) {
