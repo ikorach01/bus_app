@@ -12,7 +12,7 @@ class RealtimeProvider extends ChangeNotifier {
   
   // Current driver route info
   int? _currentRouteId;
-  String? _busId;
+  String? _currentBusId;
   
   // Current location info
   LocationData? _currentLocation;
@@ -83,7 +83,7 @@ class RealtimeProvider extends ChangeNotifier {
       print('Original start station: $startStation');
       print('Original end station: $endStation');
       
-      _busId = busId;
+      _currentBusId = busId;
       
       // Extract the station names without the municipality part
       String departureStationName = _extractStationNameOnly(startStation);
@@ -313,13 +313,46 @@ class RealtimeProvider extends ChangeNotifier {
       
       // Reset route info
       _currentRouteId = null;
-      _busId = null;
+      _currentBusId = null;
       
       notifyListeners();
       return true;
     } catch (e) {
       debugPrint('Error ending route: $e');
       return false;
+    }
+  }
+  
+  // Stop the current route
+  Future<void> stopRoute() async {
+    try {
+      // Stop location tracking
+      await _locationSubscription?.cancel();
+      _locationSubscription = null;
+
+      if (_currentRouteId != null) {
+        // Update the end time in driver_routes
+        await Supabase.instance.client
+            .from('driver_routes')
+            .update({
+              'end_time': DateTime.now().toIso8601String(),
+            })
+            .eq('id', _currentRouteId!);
+
+        // Remove bus position when trip ends
+        if (_currentBusId != null) {
+          await Supabase.instance.client
+              .from('bus_positions')
+              .delete()
+              .eq('bus_id', _currentBusId!);
+        }
+      }
+
+      _currentRouteId = null;
+      _currentBusId = null;
+    } catch (e) {
+      print('Error stopping route: $e');
+      rethrow;
     }
   }
   
@@ -345,13 +378,13 @@ class RealtimeProvider extends ChangeNotifier {
   
   // Send location update to server
   Future<void> _sendLocationUpdate() async {
-    if (_currentRouteId == null || _currentLocation == null || _busId == null) return;
+    if (_currentRouteId == null || _currentLocation == null || _currentBusId == null) return;
     
     try {
       await _supabase
           .from('bus_positions')
           .insert({
-            'bus_id': _busId!,
+            'bus_id': _currentBusId!,
             'route_id': _currentRouteId!,
             'latitude': _currentLocation!.latitude,
             'longitude': _currentLocation!.longitude,
@@ -369,7 +402,7 @@ class RealtimeProvider extends ChangeNotifier {
   
   // Update bus status in buses table
   Future<void> _updateBusStatus(String? destination) async {
-    if (_busId == null || _currentLocation == null) return;
+    if (_currentBusId == null || _currentLocation == null) return;
     
     try {
       // Calculate ETA based on distance and speed
@@ -393,7 +426,7 @@ class RealtimeProvider extends ChangeNotifier {
       await _supabase
           .from('buses')
           .update(updateData)
-          .eq('id', _busId!);
+          .eq('id', _currentBusId!);
     } catch (e) {
       debugPrint('Error updating bus status: $e');
     }
