@@ -403,7 +403,7 @@ class RealtimeProvider extends ChangeNotifier {
   void _listenToBusPositions() {
     try {
       _busPositionsSubscription = _supabase
-          .from('bus_positions')
+          .from('buses')
           .stream(primaryKey: ['id'])
           .execute()
           .map((event) => event.map((e) => e).toList())
