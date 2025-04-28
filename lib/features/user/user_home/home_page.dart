@@ -25,6 +25,7 @@ class _HomePageState extends State<HomePage> {
   List<LatLng> _routePoints = [];
   bool _mapReady = false;
   List<Map<String, dynamic>> _stations = [];
+  bool _showOnlyMoving = false;
 
   // This will be replaced with real-time data
   final List<Map<String, dynamic>> _mockBuses = [
@@ -492,11 +493,13 @@ class _HomePageState extends State<HomePage> {
           }).toList()
         : _mockBuses; // Fallback to mock data if no real buses
     
-    // Filter buses based on selected station
-    final filteredBuses = busesForMap.where((bus) {
-      return _selectedStationName == null || 
-             bus['destination'] == _selectedStationName;
-    }).toList();
+    // Show moving buses if refreshed, else filter by station
+    final filteredBuses = _showOnlyMoving
+        ? busesForMap.where((bus) => (bus['speed'] ?? 0) > 0).toList()
+        : busesForMap.where((bus) {
+            return _selectedStationName == null ||
+                   bus['destination'] == _selectedStationName;
+          }).toList();
 
     return Scaffold(
       body: Stack(
@@ -593,6 +596,16 @@ class _HomePageState extends State<HomePage> {
               onPressed: _getUserLocation,
               backgroundColor: Colors.blue,
               child: const Icon(Icons.my_location, color: Colors.white),
+            ),
+          ),
+          Positioned(
+            top: 80,
+            right: 20,
+            child: FloatingActionButton(
+              heroTag: 'refreshFAB',
+              onPressed: _refreshBuses,
+              backgroundColor: Colors.green,
+              child: const Icon(Icons.refresh, color: Colors.white),
             ),
           ),
           Positioned(
@@ -694,5 +707,12 @@ class _HomePageState extends State<HomePage> {
         ],
       ),
     );
+  }
+
+  void _refreshBuses() {
+    setState(() {
+      _selectedStationName = null;
+      _showOnlyMoving = true;
+    });
   }
 }
