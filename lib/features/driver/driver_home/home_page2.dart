@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
+import 'trips_route.dart';
 import 'settings2.dart';
-import 'all_trips.dart';
+import 'departure2.dart';
+import 'destination2.dart';
 
 class HomePage2 extends StatefulWidget {
   const HomePage2({Key? key}) : super(key: key);
@@ -14,7 +16,11 @@ class HomePage2 extends StatefulWidget {
 
 class _HomePage2State extends State<HomePage2> {
   LocationData? _currentLocation;
+  LatLng? _destinationLocation;
+  List<LatLng> _routePoints = [];
   late MapController _mapController;
+  final TextEditingController _departureController = TextEditingController();
+  final TextEditingController _arrivalController = TextEditingController();
 
   @override
   void initState() {
@@ -64,6 +70,55 @@ class _HomePage2State extends State<HomePage2> {
     }
   }
 
+  Future<void> _openDeparturePage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const Departure2Page()),
+    );
+    
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        String locationInfo = result['name'];
+        if (result['mairie'] != null && result['mairie'].toString().isNotEmpty) {
+          locationInfo += ' (${result['mairie']})';
+        }
+        _departureController.text = locationInfo;
+        
+        // If you have coordinates, you can set them here
+        if (result['latitude'] != null && result['longitude'] != null) {
+          final lat = double.parse(result['latitude'].toString());
+          final lng = double.parse(result['longitude'].toString());
+          _mapController.move(LatLng(lat, lng), 14.0);
+        }
+      });
+    }
+  }
+
+  Future<void> _openDestinationPage() async {
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (context) => const Destination2Page()),
+    );
+    
+    if (result != null && result is Map<String, dynamic>) {
+      setState(() {
+        String locationInfo = result['name'];
+        if (result['mairie'] != null && result['mairie'].toString().isNotEmpty) {
+          locationInfo += ' (${result['mairie']})';
+        }
+        _arrivalController.text = locationInfo;
+        
+        // If you have coordinates, you can set them here
+        if (result['latitude'] != null && result['longitude'] != null) {
+          final lat = double.parse(result['latitude'].toString());
+          final lng = double.parse(result['longitude'].toString());
+          _destinationLocation = LatLng(lat, lng);
+          _mapController.move(LatLng(lat, lng), 14.0);
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -75,7 +130,7 @@ class _HomePage2State extends State<HomePage2> {
             options: MapOptions(
               initialCenter: _currentLocation != null
                   ? LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)
-                  : const LatLng(27.87374386370353, -0.28424559734165983),
+                  : LatLng(27.87374386370353, -0.28424559734165983),
               initialZoom: 14.0,
             ),
             children: [
@@ -83,6 +138,16 @@ class _HomePage2State extends State<HomePage2> {
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.bus_app',
               ),
+              if (_routePoints.isNotEmpty)
+                PolylineLayer(
+                  polylines: [
+                    Polyline(
+                      points: _routePoints,
+                      strokeWidth: 5.0,
+                      color: const Color(0xFF2A52C9),
+                    ),
+                  ],
+                ),
               MarkerLayer(
                 markers: [
                   if (_currentLocation != null)
@@ -91,6 +156,13 @@ class _HomePage2State extends State<HomePage2> {
                       width: 40,
                       height: 40,
                       child: const Icon(Icons.my_location, color: Color(0xFF2A52C9), size: 30),
+                    ),
+                  if (_destinationLocation != null)
+                    Marker(
+                      point: _destinationLocation!,
+                      width: 40,
+                      height: 40,
+                      child: const Icon(Icons.location_on, color: Color(0xFF9CB3F9), size: 30),
                     ),
                 ],
               ),
@@ -129,74 +201,141 @@ class _HomePage2State extends State<HomePage2> {
                     BoxShadow(
                       color: Colors.black.withOpacity(0.1),
                       blurRadius: 10,
-                      offset: const Offset(0, 4),
+                      offset: const Offset(0, 2),
                     ),
                   ],
                 ),
-                child: const Icon(Icons.settings, color: Color(0xFF2A52C9)),
+                child: const Icon(
+                  Icons.settings,
+                  color: Color(0xFF2A52C9),
+                  size: 24,
+                ),
               ),
             ),
           ),
 
-          // Bottom Panel with Trips Button
+          // Bottom Sheet
           Positioned(
-            bottom: 0,
             left: 0,
             right: 0,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 10,
-                    offset: const Offset(0, -5),
-                  ),
-                ],
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Text(
-                    'Manage Your Trips',
-                    style: TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+            bottom: 0,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Input Form
+                Container(
+                  padding: const EdgeInsets.all(24),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.95),
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [
+                        const Color(0xFF9CB3F9).withOpacity(0.1),
+                        const Color(0xFF2A52C9).withOpacity(0.2),
+                      ],
                     ),
-                    textAlign: TextAlign.center,
                   ),
-                  const SizedBox(height: 16),
-                  ElevatedButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => const AllTripsPage(),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Enter Route Details',
+                        style: TextStyle(
+                          color: const Color(0xFF14202E),
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
                         ),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF2A52C9),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
                       ),
-                    ),
-                    child: const Text(
-                      'My Trips',
-                      style: TextStyle(fontSize: 16),
-                    ),
+                      const SizedBox(height: 24),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF9CB3F9)),
+                        ),
+                        child: TextField(
+                          controller: _departureController,
+                          decoration: InputDecoration(
+                            hintText: 'Current Location',
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.all(16),
+                            prefixIcon: Icon(Icons.location_on, color: const Color(0xFF2A52C9)),
+                          ),
+                          style: TextStyle(fontSize: 16),
+                          readOnly: true, // Make it read-only
+                          onTap: _openDeparturePage, // Open departure page on tap
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.8),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFF9CB3F9)),
+                        ),
+                        child: TextField(
+                          controller: _arrivalController,
+                          decoration: InputDecoration(
+                            hintText: 'Destination',
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.all(16),
+                            prefixIcon: Icon(Icons.location_on, color: const Color(0xFF2A52C9)),
+                          ),
+                          style: TextStyle(fontSize: 16),
+                          readOnly: true, // Make it read-only
+                          onTap: _openDestinationPage, // Open destination page on tap
+                        ),
+                      ),
+                      const SizedBox(height: 24),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 56,
+                        child: ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TripsRoute(
+                                  departure: _departureController.text,
+                                  arrival: _arrivalController.text,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF2A52C9),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                            ),
+                          ),
+                          child: Text(
+                            'Confirm Route',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    _departureController.dispose();
+    _arrivalController.dispose();
+    super.dispose();
   }
 }
