@@ -101,9 +101,10 @@ class _DriverLicensePageState extends State<DriverLicensePage> {
         _licenseFrontImage = File(image.path);
       });
       
-      // Read the image as bytes and store in driverData
+      // Convert image to base64 and store in driverData
       final bytes = await _licenseFrontImage!.readAsBytes();
-      _driverData['license_image_front'] = bytes;
+      final base64Image = base64Encode(bytes);
+      _driverData['license_image_front'] = base64Image;
       
       // Save data after picking image
       _saveData();
@@ -117,9 +118,10 @@ class _DriverLicensePageState extends State<DriverLicensePage> {
         _licenseBackImage = File(image.path);
       });
       
-      // Read the image as bytes and store in driverData
+      // Convert image to base64 and store in driverData
       final bytes = await _licenseBackImage!.readAsBytes();
-      _driverData['license_image_back'] = bytes;
+      final base64Image = base64Encode(bytes);
+      _driverData['license_image_back'] = base64Image;
       
       // Save data after picking image
       _saveData();

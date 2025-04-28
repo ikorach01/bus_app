@@ -36,7 +36,9 @@ class _SettingsPageState extends State<SettingsPage> {
     
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Settings'),
+        backgroundColor: Colors.blue,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text('Settings', style: TextStyle(color: Colors.white)),
         centerTitle: true,
       ),
       body: ListView(
@@ -44,6 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
         children: [
           _buildSectionHeader('Notifications'),
           SwitchListTile(
+            activeColor: Colors.blue,
             title: const Text('Delay Alerts'),
             value: _delayAlertsEnabled,
             onChanged: (value) async {
@@ -88,14 +91,6 @@ class _SettingsPageState extends State<SettingsPage> {
             title: const Text('Logout'),
             onTap: () => _logout(context),
           ),
-          ListTile(
-            leading: const Icon(Icons.delete, color: Colors.red),
-            title: const Text(
-              'Delete Account',
-              style: TextStyle(color: Colors.red),
-            ),
-            onTap: () => _showDeleteAccountDialog(context),
-          ),
         ],
       ),
     );
@@ -109,6 +104,7 @@ class _SettingsPageState extends State<SettingsPage> {
         style: const TextStyle(
           fontWeight: FontWeight.bold,
           fontSize: 18,
+          color: Colors.blue,
         ),
       ),
     );

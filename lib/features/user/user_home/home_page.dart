@@ -8,6 +8,7 @@ import 'package:provider/provider.dart';
 import 'package:bus_app/providers/settings_provider.dart';
 import 'package:bus_app/features/user/settings_page.dart';
 import 'package:bus_app/features/driver/driver_home/realtime_provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -23,18 +24,7 @@ class _HomePageState extends State<HomePage> {
   late MapController _mapController;
   List<LatLng> _routePoints = [];
   bool _mapReady = false;
-  final List<Map<String, dynamic>> _stations = [
-    {
-      'name': 'Nearby Municipalities Station',
-      'lat': 27.87374386370353,
-      'lon': -0.28424559734165983,
-    },
-    {
-      'name': 'Distant Municipalities Station',
-      'lat': 27.88156764617432,
-      'lon': -0.28019696476583544,
-    },
-  ];
+  List<Map<String, dynamic>> _stations = [];
 
   // This will be replaced with real-time data
   final List<Map<String, dynamic>> _mockBuses = [
@@ -96,9 +86,11 @@ class _HomePageState extends State<HomePage> {
     super.initState();
     _mapController = MapController();
     _getUserLocation();
+    _fetchStations();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkForDelays();
       _fetchActiveBuses();
+      _fetchStations();
     });
   }
 
@@ -205,20 +197,7 @@ class _HomePageState extends State<HomePage> {
         if (!mounted) return;
         setState(() {
           _currentLocation = locationData;
-          _mapReady = true;
         });
-        
-        // Only move the map if we have valid coordinates
-        if (locationData.latitude != null && locationData.longitude != null) {
-          try {
-            _mapController.move(
-              _validateCoordinates(locationData.latitude, locationData.longitude),
-              14.0,
-            );
-          } catch (e) {
-            print("Error moving map: $e");
-          }
-        }
       } catch (e) {
         print("Error getting location: $e");
         // Set map as ready even if location failed
@@ -235,11 +214,36 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+  Future<void> _fetchStations() async {
+    try {
+      final data = await Supabase.instance.client
+          .from('stations')
+          .select('name, latitude, longitude');
+      if (data is List) {
+        final stations = data.map((e) => {
+          'name': e['name'],
+          'lat': double.tryParse(e['latitude']) ?? 0.0,
+          'lon': double.tryParse(e['longitude']) ?? 0.0,
+        }).toList();
+        setState(() => _stations = stations);
+      } else {
+        print('Unexpected stations data: $data');
+      }
+    } catch (e) {
+      print('Exception fetching stations: $e');
+    }
+  }
+
   void _updateSelectedStation(Map<String, dynamic> station) {
+    final latlng = LatLng(station['lat'], station['lon']);
     setState(() {
-      _selectedStation = LatLng(station['lat'], station['lon']);
+      _selectedStation = latlng;
       _selectedStationName = station['name'];
     });
+    // only move map if it's already ready
+    if (_mapReady) {
+      _mapController.move(latlng, 14.0);
+    }
   }
 
   Future<void> _calculateRoute() async {
@@ -497,91 +501,90 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Stack(
         children: [
-          // Only show map if it's ready
-          if (_mapReady || _currentLocation != null)
-            FlutterMap(
-              mapController: _mapController,
-              options: MapOptions(
-                initialCenter: _currentLocation != null 
-                  ? _validateCoordinates(_currentLocation!.latitude, _currentLocation!.longitude)
-                  : const LatLng(27.87374386370353, -0.28424559734165983), // Default center if location not available
-                initialZoom: 14.0,
-                onMapReady: () {
-                  setState(() {
-                    _mapReady = true;
-                  });
-                },
+          FlutterMap(
+            mapController: _mapController,
+            options: MapOptions(
+              initialCenter: _currentLocation != null 
+                ? _validateCoordinates(_currentLocation!.latitude, _currentLocation!.longitude)
+                : const LatLng(27.87374386370353, -0.28424559734165983),
+              initialZoom: 14.0,
+              onMapReady: () {
+                setState(() {
+                  _mapReady = true;
+                });
+                // center on pre-selected station once map loads
+                if (_selectedStation != null) {
+                  _mapController.move(_selectedStation!, 14.0);
+                } else if (_currentLocation != null) {
+                  _mapController.move(_validateCoordinates(_currentLocation!.latitude, _currentLocation!.longitude), 14.0);
+                }
+              },
+            ),
+            children: [
+              TileLayer(
+                urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+                userAgentPackageName: 'com.example.bus_app',
               ),
-              children: [
-                TileLayer(
-                  urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  userAgentPackageName: 'com.example.bus_app',
-                ),
-                MarkerLayer(
-                  markers: [
-                    if (_currentLocation != null)
-                      Marker(
-                        point: _validateCoordinates(_currentLocation!.latitude, _currentLocation!.longitude),
+              MarkerLayer(
+                markers: [
+                  if (_currentLocation != null)
+                    Marker(
+                      point: _validateCoordinates(_currentLocation!.latitude, _currentLocation!.longitude),
+                      width: 40,
+                      height: 40,
+                      child: SizedBox(
                         width: 40,
                         height: 40,
+                        child: Image.asset(
+                          'assets/images/user_location.png',
+                          width: 20,
+                          height: 20,
+                        ),
+                      ),
+                    ),
+                  ..._stations.where((station) => _selectedStationName == null || station['name'] == _selectedStationName).map(
+                    (station) => Marker(
+                      point: _validateCoordinates(station['lat'], station['lon']),
+                      width: 40,
+                      height: 40,
+                      child: GestureDetector(
+                        onTap: () => _updateSelectedStation(station),
                         child: SizedBox(
                           width: 40,
                           height: 40,
                           child: Image.asset(
-                            'assets/images/user_location.png',
+                            'assets/images/station_icon.png',
                             width: 20,
                             height: 20,
                           ),
                         ),
                       ),
-                    ..._stations.map(
-                      (station) => Marker(
-                        point: _validateCoordinates(station['lat'], station['lon']),
-                        width: 40,
-                        height: 40,
-                        child: GestureDetector(
-                          onTap: () => _updateSelectedStation(station),
-                          child: SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: Image.asset(
-                              'assets/images/station_icon.png',
-                              width: 20,
-                              height: 20,
-                            ),
+                    ),
+                  ),
+                  // Use filteredBuses instead of _mockBuses to show only relevant buses
+                  ...filteredBuses.map(
+                    (bus) => Marker(
+                      point: _validateCoordinates(bus['position'].latitude, bus['position'].longitude),
+                      width: 40,
+                      height: 40,
+                      child: GestureDetector(
+                        onTap: () => _showBusDetails(bus),
+                        child: SizedBox(
+                          width: 40,
+                          height: 40,
+                          child: Image.asset(
+                            'assets/images/bus_icon.png',
+                            width: 20,
+                            height: 20,
                           ),
                         ),
                       ),
                     ),
-                    // Use filteredBuses instead of _mockBuses to show only relevant buses
-                    ...filteredBuses.map(
-                      (bus) => Marker(
-                        point: _validateCoordinates(bus['position'].latitude, bus['position'].longitude),
-                        width: 40,
-                        height: 40,
-                        child: GestureDetector(
-                          onTap: () => _showBusDetails(bus),
-                          child: SizedBox(
-                            width: 40,
-                            height: 40,
-                            child: Image.asset(
-                              'assets/images/bus_icon.png',
-                              width: 20,
-                              height: 20,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            )
-          else
-            // Show loading indicator if map is not ready
-            const Center(
-              child: CircularProgressIndicator(),
-            ),
+                  ),
+                ],
+              ),
+            ],
+          ),
           Positioned(
             top: 20,
             right: 20,
@@ -630,49 +633,62 @@ class _HomePageState extends State<HomePage> {
               child: const Icon(Icons.settings, color: Colors.white),
             ),
           ),
-          Positioned(
-            bottom: 20,
-            left: 20,
-            right: 20,
-            child: Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    Localizations.localeOf(context).languageCode == 'ar' 
-                        ? 'اختر المحطة' 
-                        : 'Select Station',
-                    style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          Positioned.fill(
+            child: DraggableScrollableSheet(
+              initialChildSize: 0.25, // show ~2 stations initially
+              minChildSize: 0.15,     // height when collapsed
+              maxChildSize: 0.6,      // full expand height
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                    boxShadow: [BoxShadow(color: Colors.black26, blurRadius: 10)],
                   ),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      _updateSelectedStation(_stations[0]);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFCAD7FF),
-                      minimumSize: const Size(double.infinity, 50),
-                    ),
-                    child: Text(_stations[0]['name']),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 40,
+                        height: 5,
+                        margin: const EdgeInsets.only(top: 8, bottom: 8),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(2.5),
+                        ),
+                      ),
+                      Expanded(
+                        child: ListView(
+                          controller: scrollController,
+                          children: [
+                            Text(
+                              Localizations.localeOf(context).languageCode == 'ar'
+                                  ? 'اختر المحطة'
+                                  : 'Select Station',
+                              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(height: 10),
+                            ..._stations.map((station) => Padding(
+                                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                                  child: ElevatedButton(
+                                    onPressed: () => _updateSelectedStation(station),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: const Color(0xFFCAD7FF),
+                                      minimumSize: const Size(double.infinity, 50),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                    ),
+                                    child: Text(station['name']),
+                                  ),
+                                )),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 10),
-                  ElevatedButton(
-                    onPressed: () {
-                      _updateSelectedStation(_stations[1]);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFCAD7FF),
-                      minimumSize: const Size(double.infinity, 50),
-                    ),
-                    child: Text(_stations[1]['name']),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
         ],

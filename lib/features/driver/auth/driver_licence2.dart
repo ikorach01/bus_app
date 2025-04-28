@@ -105,9 +105,10 @@ class _DriverLicense2PageState extends State<DriverLicense2Page> {
         _greyCardFrontImage = File(image.path);
       });
       
-      // Read the image as bytes and store in driverData
+      // Convert image to base64 and store in driverData
       final bytes = await _greyCardFrontImage!.readAsBytes();
-      _driverData['grey_card_image_front'] = bytes;
+      final base64Image = base64Encode(bytes);
+      _driverData['grey_card_image_front'] = base64Image;
       
       // Save data after picking image
       _saveData();
@@ -122,9 +123,10 @@ class _DriverLicense2PageState extends State<DriverLicense2Page> {
         _greyCardBackImage = File(image.path);
       });
       
-      // Read the image as bytes and store in driverData
+      // Convert image to base64 and store in driverData
       final bytes = await _greyCardBackImage!.readAsBytes();
-      _driverData['grey_card_image_back'] = bytes;
+      final base64Image = base64Encode(bytes);
+      _driverData['grey_card_image_back'] = base64Image;
       
       // Save data after picking image
       _saveData();
