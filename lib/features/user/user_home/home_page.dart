@@ -504,6 +504,21 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Stack(
         children: [
+          if (realBuses.isEmpty)
+            Positioned(
+              top: 100,
+              left: 0,
+              right: 0,
+              child: Center(
+                child: Text(
+                  Localizations.localeOf(context).languageCode == 'ar'
+                      ? 'لا توجد حافلات نشطة حالياً'
+                      : 'No active buses at the moment',
+                  style: const TextStyle(fontSize: 18, color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
+              ),
+            ),
           FlutterMap(
             mapController: _mapController,
             options: MapOptions(
@@ -524,6 +539,7 @@ class _HomePageState extends State<HomePage> {
               },
             ),
             children: [
+
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
                 userAgentPackageName: 'com.example.bus_app',
@@ -564,10 +580,10 @@ class _HomePageState extends State<HomePage> {
                       ),
                     ),
                   ),
-                  // Use filteredBuses instead of _mockBuses to show only relevant buses
+                  // Show bus markers from real-time data only
                   ...filteredBuses.map(
                     (bus) => Marker(
-                      point: _validateCoordinates(bus['position'].latitude, bus['position'].longitude),
+                      point: bus['position'],
                       width: 40,
                       height: 40,
                       child: GestureDetector(

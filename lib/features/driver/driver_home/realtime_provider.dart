@@ -190,6 +190,8 @@ class RealtimeProvider extends ChangeNotifier {
         // Start location tracking
         _startLocationTracking();
         
+        await _sendLocationUpdate();
+        
         notifyListeners();
         return true;
       } catch (e) {
@@ -241,6 +243,8 @@ class RealtimeProvider extends ChangeNotifier {
           
           // Start location tracking
           _startLocationTracking();
+          
+          await _sendLocationUpdate();
           
           notifyListeners();
           return true;
