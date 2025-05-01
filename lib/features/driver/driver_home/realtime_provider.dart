@@ -13,6 +13,9 @@ class RealtimeProvider extends ChangeNotifier {
   // Current driver route info
   int? _currentRouteId;
   String? _busId;
+  String? _driverId;
+  String? _startStation;
+  String? _endStation;
   
   // Current location info
   LocationData? _currentLocation;
@@ -29,6 +32,10 @@ class RealtimeProvider extends ChangeNotifier {
   int? get currentRouteId => _currentRouteId;
   List<Map<String, dynamic>> get activeBuses => _activeBuses;
   bool get isRouteActive => _currentRouteId != null;
+  String? get busId => _busId;
+  String? get driverId => _driverId;
+  String? get startStation => _startStation;
+  String? get endStation => _endStation;
   
   RealtimeProvider() {
     try {
@@ -84,6 +91,9 @@ class RealtimeProvider extends ChangeNotifier {
       print('Original end station: $endStation');
       
       _busId = busId;
+      _driverId = driverId;
+      _startStation = startStation;
+      _endStation = endStation;
       
       // Extract the station names without the municipality part
       String departureStationName = _extractStationNameOnly(startStation);
@@ -212,30 +222,23 @@ class RealtimeProvider extends ChangeNotifier {
         // Try with all fields
         print('Trying full insert with all fields...');
         try {
-          // Prepare the data for the insert
+          // Create a new route entry in the driver_routes table
           final routeData = {
             'driver_id': driverId,
             'bus_id': busId,
             'start_station': departureStationName,
             'end_station': arrivalStationName,
+            'start_station_id': departureStation != null ? departureStation['id'] : null,
+            'end_station_id': arrivalStation != null ? arrivalStation['id'] : null,
             'start_time': DateTime.now().toUtc().toIso8601String(),
           };
           
-          // Add station IDs if available
-          if (departureStation != null) {
-            routeData['start_station_id'] = departureStation['id'];
-          }
-          
-          if (arrivalStation != null) {
-            routeData['end_station_id'] = arrivalStation['id'];
-          }
-          
-          print('Route data to insert: $routeData');
+          // Store station IDs in the database only
           
           final response = await _supabase
               .from('driver_routes')
               .insert(routeData)
-              .select()
+              .select('id')
               .single();
           
           print('Route created successfully with full data: $response');
@@ -300,11 +303,14 @@ class RealtimeProvider extends ChangeNotifier {
   }
   
   // End the current route
-  Future<bool> endRoute() async {
-    if (_currentRouteId == null) return false;
+  Future<void> endRoute() async {
+    if (_currentRouteId == null) return;
     
     try {
-      // Update the end_time in driver_routes
+      // Stop location tracking
+      _stopLocationTracking();
+      
+      // Update route end time in driver_routes table
       await _supabase
           .from('driver_routes')
           .update({
@@ -312,18 +318,17 @@ class RealtimeProvider extends ChangeNotifier {
           })
           .eq('id', _currentRouteId!);
       
-      // Stop location tracking
-      _stopLocationTracking();
-      
-      // Reset route info
+      // Clear route info
       _currentRouteId = null;
       _busId = null;
+      _driverId = null;
+      _startStation = null;
+      _endStation = null;
+      // All route data cleared
       
       notifyListeners();
-      return true;
     } catch (e) {
       debugPrint('Error ending route: $e');
-      return false;
     }
   }
   
@@ -352,6 +357,7 @@ class RealtimeProvider extends ChangeNotifier {
     if (_currentRouteId == null || _currentLocation == null || _busId == null) return;
     
     try {
+      // Insert location update into bus_positions table
       await _supabase
           .from('bus_positions')
           .insert({
@@ -406,20 +412,68 @@ class RealtimeProvider extends ChangeNotifier {
   // Listen to all bus positions for passenger view
   void _listenToBusPositions() {
     try {
-      _busPositionsSubscription = _supabase
-          .from('buses')
-          .stream(primaryKey: ['id'])
-          .execute()
-          .map((event) => event.map((e) => e).toList())
-          .listen((buses) {
-            // Update active buses with latest positions
-            _activeBuses = buses.where((bus) => 
-              bus['latitude'] != null && 
-              bus['longitude'] != null
-            ).toList();
-            notifyListeners();
-          }, onError: (error) {
-            debugPrint('Error in bus positions stream: $error');
+      // First, get active routes (not ended yet)
+      _supabase
+          .from('driver_routes')
+          .select('id, bus_id, driver_id, start_station, end_station')
+          .filter('end_time', 'is', null)
+          .then((activeRoutes) {
+            // For each active route, get the latest position
+            if (activeRoutes.isNotEmpty) {
+              final activeBusIds = activeRoutes.map<String>((route) => route['bus_id'] as String).toSet().toList();
+              
+              // Set up subscription to bus positions for active buses
+              _busPositionsSubscription = _supabase
+                .from('bus_positions')
+                .stream(primaryKey: ['id'])
+                .inFilter('bus_id', activeBusIds)
+                .order('timestamp', ascending: false)
+                .limit(activeBusIds.length * 2) // Get latest 2 positions per bus to calculate heading
+                .execute()
+                .map((positions) {
+                  // Group positions by bus_id and get the latest for each
+                  final Map<String, Map<String, dynamic>> latestPositions = {};
+                  for (var position in positions) {
+                    final busId = position['bus_id'];
+                    if (!latestPositions.containsKey(busId) || 
+                        DateTime.parse(position['timestamp']).isAfter(
+                          DateTime.parse(latestPositions[busId]!['timestamp']))) {
+                      latestPositions[busId] = position;
+                    }
+                  }
+                  
+                  // Combine with route information
+                  return latestPositions.values.map((position) {
+                    final route = activeRoutes.firstWhere(
+                      (r) => r['bus_id'] == position['bus_id'],
+                      orElse: () => {},
+                    );
+                    
+                    if (route.isNotEmpty) {
+                      return {
+                        ...position,
+                        'driver_id': route['driver_id'],
+                        'start_station': route['start_station'],
+                        'end_station': route['end_station'],
+                      };
+                    }
+                    return position;
+                  }).toList();
+                })
+                .listen((buses) {
+                  // Update active buses with latest positions
+                  _activeBuses = buses.where((bus) => 
+                    bus['latitude'] != null && 
+                    bus['longitude'] != null
+                  ).toList();
+                  notifyListeners();
+                }, onError: (error) {
+                  debugPrint('Error in bus positions stream: $error');
+                });
+            }
+          })
+          .catchError((error) {
+            debugPrint('Error fetching active routes: $error');
           });
     } catch (e) {
       debugPrint('Error setting up bus positions stream: $e');

@@ -158,105 +158,143 @@ class _MyAppState extends State<MyApp> {
       try {
         await Supabase.instance.client.auth.refreshSession();
         if (user.emailConfirmedAt != null) {
+          // 1. التحقق من SharedPreferences أولاً - هذا أسرع وأكثر أماناً
+          final prefs = await SharedPreferences.getInstance();
+          final isDriverRegistered = prefs.getBool('driver_${user.id}_registered') ?? false;
+          final isPassengerRegistered = prefs.getBool('passenger_${user.id}_registered') ?? false;
+          
+          print('SharedPreferences check: Driver=$isDriverRegistered, Passenger=$isPassengerRegistered');
+          
+          // إذا كان لدينا معلومات في SharedPreferences، استخدمها على الفور
+          if (isDriverRegistered) {
+            print('Using SharedPreferences: User is a registered driver');
+            _setInitialScreen(const HomePage2());
+            return;
+          } else if (isPassengerRegistered) {
+            print('Using SharedPreferences: User is a registered passenger');
+            _setInitialScreen(const HomePage());
+            return;
+          }
+          
+          // 2. إذا لم يكن لدينا معلومات في SharedPreferences، التحقق من جدول drivers
+          try {
+            print('Checking drivers table');
+            final driverResponse = await Supabase.instance.client
+                .from('drivers')
+                .select('id')
+                .eq('id', user.id)
+                .maybeSingle();
+                
+            if (driverResponse != null) {
+              // تم العثور على السائق
+              print('Driver record found in drivers table');
+              await prefs.setBool('driver_${user.id}_registered', true);
+              await prefs.setBool('passenger_${user.id}_registered', false);
+              _setInitialScreen(const HomePage2());
+              return;
+            }
+          } catch (e) {
+            print('Error checking drivers table: $e');
+          }
+          
+          // 3. التحقق من البيانات الوصفية
           final userData = user.userMetadata;
           final userType = userData?['user_type'] as String?;
-
-          if (userType == null) {
-            // Check if a driver record exists for this user
-            try {
-              final response = await Supabase.instance.client
-                  .from('drivers')
-                  .select('id')
-                  .eq('id', user.id);
-              if (response != null && response.isNotEmpty) {
-                // Driver record exists, update user metadata to set user_type to 'driver'
-                await Supabase.instance.client.auth.updateUser(UserAttributes(
-                  data: {'user_type': 'driver'},
-                ));
-                print('User metadata updated: set user_type to driver');
-                _setInitialScreen(const HomePage2());
-                return;
-              }
-            } catch (e) {
-              print('Error checking driver record for missing user_type: $e');
-            }
-            // If no driver record, proceed to role selection
-            _setInitialScreen(RoleSelectionPage(
-              userId: user.id,
-              userEmail: user.email ?? '',
-              userPhone: userData?['phone'] as String? ?? '',
-            ));
-          } else {
-            if (userType == 'driver') {
-              // Check if driver has already completed registration
-              try {
-                // First, check SharedPreferences for a flag indicating the driver is registered
+          
+          if (userType == 'driver') {
+            print('User metadata indicates user is a driver');
+            _setInitialScreen(const AddInformationPage());
+            return;
+          } else if (userType == 'passenger') {
+            print('User metadata indicates user is a passenger');
+            await prefs.setBool('passenger_${user.id}_registered', true);
+            _setInitialScreen(const HomePage());
+            return;
+          }
+          
+          // 4. في النهاية، التحقق من جدول user_profiles
+          try {
+            print('Last resort: Checking user_profiles table');
+            final userProfileResponse = await Supabase.instance.client
+                .from('user_profiles')
+                .select('user_type')
+                .eq('id', user.id)
+                .maybeSingle();
+            
+            if (userProfileResponse != null) {
+              final userType = userProfileResponse['user_type'] as String?;
+              print('User type from user_profiles: $userType');
+              
+              // Check role and redirect accordingly
+              if (userType == 'driver') {
+                // User is a driver, check if already registered
                 final prefs = await SharedPreferences.getInstance();
                 final isDriverRegistered = prefs.getBool('driver_${user.id}_registered') ?? false;
                 
                 if (isDriverRegistered) {
-                  // If we have a local record that the driver is registered, go directly to HomePage2
                   _setInitialScreen(const HomePage2());
                   print('Driver registered (from SharedPreferences), redirecting to HomePage2');
                   return;
                 }
                 
-                // If no local record, try a direct query to check if the driver exists
-                final response = await Supabase.instance.client
+                // Check if driver has completed registration in drivers table
+                final driverResponse = await Supabase.instance.client
                     .from('drivers')
                     .select('id')
                     .eq('id', user.id);
                 
-                // If we get a non-empty response, the driver exists
-                if (response != null && response.isNotEmpty) {
+                if (driverResponse != null && driverResponse.isNotEmpty) {
                   // Driver exists in the database, go to HomePage2
                   _setInitialScreen(const HomePage2());
-                  print('Driver exists, redirecting to HomePage2');
-                  
-                  // Save this information to SharedPreferences for future app launches
+                  print('Driver exists, redirecting to driver HomePage2');
                   await prefs.setBool('driver_${user.id}_registered', true);
+                  
+                  // Also update user metadata to match user_profiles
+                  await Supabase.instance.client.auth.updateUser(UserAttributes(
+                    data: {'user_type': 'driver'},
+                  ));
                 } else {
                   // Driver doesn't exist in database, show registration page
                   _setInitialScreen(const AddInformationPage());
                   print('Driver does not exist, redirecting to AddInformationPage');
                 }
-              } catch (e) {
-                print('Error checking driver existence: $e');
-                
-                // If there's an error, try direct navigation to HomePage2
-                // This is a safer default since we want to avoid making the user
-                // register multiple times
-                _setInitialScreen(const HomePage2());
-              }
-            } else if (userType == 'passenger') {
-              try {
-                // First, check SharedPreferences for a flag indicating the passenger is registered
+              } else if (userType == 'passenger') {
+                // User is a passenger
                 final prefs = await SharedPreferences.getInstance();
                 final isPassengerRegistered = prefs.getBool('passenger_${user.id}_registered') ?? false;
+                
                 if (isPassengerRegistered) {
                   _setInitialScreen(const HomePage());
-                  print('Passenger registered (from SharedPreferences), redirecting to HomePage');
+                  print('Passenger registered (from SharedPreferences), redirecting to passenger HomePage');
                   return;
                 }
-                // If no local record, try a direct query to check if the passenger exists
-                final response = await Supabase.instance.client
-                    .from('user_profiles')
-                    .select('id')
-                    .eq('id', user.id);
-                if (response != null && response.isNotEmpty) {
-                  _setInitialScreen(const HomePage());
-                  print('Passenger exists, redirecting to HomePage');
-                  await prefs.setBool('passenger_${user.id}_registered', true);
-                } else {
-                  // Passenger doesn't exist in database, show onboarding/location page
-                  _setInitialScreen(const AskLocationScreen());
-                  print('Passenger does not exist, redirecting to AskLocationScreen');
-                }
-              } catch (e) {
-                print('Error checking passenger existence: $e');
+                
+                // Passenger exists in user_profiles, go to HomePage
                 _setInitialScreen(const HomePage());
+                print('Passenger exists, redirecting to passenger HomePage');
+                await prefs.setBool('passenger_${user.id}_registered', true);
+                
+                // Also update user metadata to match user_profiles
+                await Supabase.instance.client.auth.updateUser(UserAttributes(
+                  data: {'user_type': 'passenger'},
+                ));
+              } else {
+                // Role not set or unknown, go to role selection
+                final userData = user.userMetadata;
+                _setInitialScreen(RoleSelectionPage(
+                  userId: user.id,
+                  userEmail: user.email ?? '',
+                  userPhone: userData?['phone'] as String? ?? '',
+                ));
               }
+            } else {
+              // User profile not found, fallback to checking metadata
+              _fallbackToMetadataCheck(user);
             }
+          } catch (e) {
+            print('Error checking user_profiles table: $e');
+            // If there's an error with user_profiles, fallback to metadata
+            _fallbackToMetadataCheck(user);
           }
         } else {
           _setInitialScreen(const WelcomePage());
@@ -269,6 +307,126 @@ class _MyAppState extends State<MyApp> {
     } else {
       _setInitialScreen(const LoginPage());
     }
+  }
+
+  // Fallback method to check user type from metadata if user_profiles check fails
+  Future<void> _fallbackToMetadataCheck(User user) async {
+    print('Executing fallback to metadata check');
+
+    // ------------------------------------------------------------------------- 
+    // STAGE 1: Check driver_profiles table FIRST, since that's the most reliable 
+    // ------------------------------------------------------------------------- 
+    try {
+      // IMPORTANT: First check if driver record exists - this is our most reliable source 
+      final driverResponse = await Supabase.instance.client 
+          .from('drivers') 
+          .select('id') 
+          .eq('id', user.id) 
+          .maybeSingle(); 
+      
+      if (driverResponse != null) {
+        // The user is DEFINITELY a driver - this takes precedence over anything else 
+        print('DRIVER RECORD FOUND! User is definitely a driver'); 
+        
+        // Update user metadata to set user_type to 'driver' to keep it consistent 
+        await Supabase.instance.client.auth.updateUser(UserAttributes( 
+          data: {'user_type': 'driver'}, 
+        )); 
+        
+        // Also update user_profiles to ensure consistency 
+        try {
+          await Supabase.instance.client 
+              .from('user_profiles') 
+              .upsert({ 
+                'id': user.id, 
+                'email': user.email ?? '', 
+                'phone': user.userMetadata?['phone'] as String? ?? '', 
+                'user_type': 'driver', 
+                'updated_at': DateTime.now().toIso8601String() 
+              }); 
+          print('Updated user_profiles to set user_type to driver'); 
+        } catch (e) {
+          print('Error updating user_profiles: $e'); 
+        } 
+        
+        // Set flag in SharedPreferences 
+        final prefs = await SharedPreferences.getInstance(); 
+        await prefs.setBool('driver_${user.id}_registered', true); 
+        // Clear any passenger flags to prevent confusion 
+        await prefs.setBool('passenger_${user.id}_registered', false); 
+        
+        // Redirect to driver home page 
+        _setInitialScreen(const HomePage2()); 
+        return; 
+      } 
+    } catch (e) {
+      print('Error checking driver_profiles table: $e'); 
+    } 
+    
+    // ------------------------------------------------------------------------- 
+    // STAGE 2: Check user metadata if driver check didn't find anything 
+    // ------------------------------------------------------------------------- 
+    final userData = user.userMetadata; 
+    final userType = userData?['user_type'] as String?; 
+    print('User metadata user_type: $userType'); 
+    
+    if (userType == 'driver') { 
+      // User claims to be a driver in metadata, but no driver record found. 
+      // Direct to driver registration 
+      print('User metadata indicates driver, but no driver record exists'); 
+      _setInitialScreen(const AddInformationPage()); 
+      return; 
+    } 
+    
+    // ------------------------------------------------------------------------- 
+    // STAGE 3: Check user_profiles as final source  
+    // ------------------------------------------------------------------------- 
+    try {
+      final userProfileResponse = await Supabase.instance.client 
+          .from('user_profiles') 
+          .select('user_type') 
+          .eq('id', user.id) 
+          .maybeSingle(); 
+          
+      if (userProfileResponse != null) {
+        final dbUserType = userProfileResponse['user_type'] as String?; 
+        print('User type from user_profiles fallback check: $dbUserType'); 
+        
+        if (dbUserType == 'driver') { 
+          // User is a driver in user_profiles but has no driver record 
+          // They need to complete driver registration 
+          print('User marked as driver in profiles but no driver record exists'); 
+          _setInitialScreen(const AddInformationPage()); 
+          return; 
+        } else if (dbUserType == 'passenger') { 
+          // User is definitely a passenger 
+          final prefs = await SharedPreferences.getInstance(); 
+          await prefs.setBool('passenger_${user.id}_registered', true); 
+          await prefs.setBool('driver_${user.id}_registered', false); // Clear driver flag 
+          
+          // Update metadata to match 
+          await Supabase.instance.client.auth.updateUser(UserAttributes( 
+            data: {'user_type': 'passenger'}, 
+          )); 
+          
+          print('User confirmed as passenger from user_profiles check'); 
+          _setInitialScreen(const HomePage()); 
+          return; 
+        } 
+      } 
+    } catch (e) {
+      print('Error in final user_profiles check: $e'); 
+    } 
+    
+    // ------------------------------------------------------------------------- 
+    // STAGE 4: No definitive information found, go to role selection 
+    // ------------------------------------------------------------------------- 
+    print('No definitive role information found, directing to role selection'); 
+    _setInitialScreen(RoleSelectionPage( 
+      userId: user.id, 
+      userEmail: user.email ?? '', 
+      userPhone: userData?['phone'] as String? ?? '', 
+    )); 
   }
 
   void _setInitialScreen(Widget screen) {

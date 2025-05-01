@@ -48,7 +48,7 @@ class _AddInformationPageState extends State<AddInformationPage> {
       }
     }
   }
-  
+
   Future<void> _saveData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('driver_data', jsonEncode(_driverData));

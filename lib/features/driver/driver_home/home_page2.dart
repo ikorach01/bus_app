@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
+import 'package:provider/provider.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'trips_route.dart';
 import 'settings2.dart';
 import 'departure2.dart';
 import 'destination2.dart';
+import 'realtime_provider.dart';
 
 class HomePage2 extends StatefulWidget {
   const HomePage2({Key? key}) : super(key: key);
@@ -22,16 +25,51 @@ class _HomePage2State extends State<HomePage2> {
   final TextEditingController _departureController = TextEditingController();
   final TextEditingController _arrivalController = TextEditingController();
 
+  // Supabase client
+  final _supabase = Supabase.instance.client;
+
+  // Route state
+  bool _isRouteActive = false;
+
   @override
   void initState() {
     super.initState();
     _mapController = MapController();
     _getUserLocation();
+
+    // Check if there's an active route
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+      setState(() {
+        _isRouteActive = realtimeProvider.isRouteActive;
+      });
+
+      // Listen for changes in route status
+      realtimeProvider.addListener(_onRealtimeProviderUpdate);
+    });
+  }
+
+  void _onRealtimeProviderUpdate() {
+    if (!mounted) return;
+
+    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+    setState(() {
+      _isRouteActive = realtimeProvider.isRouteActive;
+
+      // If we have a current location from the provider, update the map
+      if (realtimeProvider.currentLocation != null) {
+        _currentLocation = realtimeProvider.currentLocation;
+        _mapController.move(
+          LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
+          14.0,
+        );
+      }
+    });
   }
 
   Future<void> _getUserLocation() async {
     Location location = Location();
-    
+
     bool serviceEnabled = await location.serviceEnabled();
     if (!serviceEnabled) {
       serviceEnabled = await location.requestService();
@@ -75,7 +113,7 @@ class _HomePage2State extends State<HomePage2> {
       context,
       MaterialPageRoute(builder: (context) => const Departure2Page()),
     );
-    
+
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
         String locationInfo = result['name'];
@@ -83,7 +121,9 @@ class _HomePage2State extends State<HomePage2> {
           locationInfo += ' (${result['mairie']})';
         }
         _departureController.text = locationInfo;
-        
+
+        // Store the station name in the controller
+
         // If you have coordinates, you can set them here
         if (result['latitude'] != null && result['longitude'] != null) {
           final lat = double.parse(result['latitude'].toString());
@@ -99,7 +139,7 @@ class _HomePage2State extends State<HomePage2> {
       context,
       MaterialPageRoute(builder: (context) => const Destination2Page()),
     );
-    
+
     if (result != null && result is Map<String, dynamic>) {
       setState(() {
         String locationInfo = result['name'];
@@ -107,7 +147,9 @@ class _HomePage2State extends State<HomePage2> {
           locationInfo += ' (${result['mairie']})';
         }
         _arrivalController.text = locationInfo;
-        
+
+        // Store the station name in the controller
+
         // If you have coordinates, you can set them here
         if (result['latitude'] != null && result['longitude'] != null) {
           final lat = double.parse(result['latitude'].toString());
@@ -118,6 +160,8 @@ class _HomePage2State extends State<HomePage2> {
       });
     }
   }
+
+
 
   @override
   Widget build(BuildContext context) {
@@ -130,42 +174,59 @@ class _HomePage2State extends State<HomePage2> {
             options: MapOptions(
               initialCenter: _currentLocation != null
                   ? LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!)
-                  : LatLng(27.87374386370353, -0.28424559734165983),
+                  : const LatLng(27.87374386370353, -0.28424559734165983), // Default to Adrar, Algeria
               initialZoom: 14.0,
             ),
             children: [
               TileLayer(
                 urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-                userAgentPackageName: 'com.example.bus_app',
+                userAgentPackageName: 'com.example.app',
               ),
+              // Draw route line if we have route points
               if (_routePoints.isNotEmpty)
                 PolylineLayer(
                   polylines: [
                     Polyline(
                       points: _routePoints,
-                      strokeWidth: 5.0,
-                      color: const Color(0xFF2A52C9),
+                      color: Colors.blue,
+                      strokeWidth: 4.0,
                     ),
                   ],
                 ),
-              MarkerLayer(
-                markers: [
-                  if (_currentLocation != null)
+              // Show current location marker
+              if (_currentLocation != null)
+                MarkerLayer(
+                  markers: [
                     Marker(
+                      width: 80.0,
+                      height: 80.0,
                       point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
-                      width: 40,
-                      height: 40,
-                      child: const Icon(Icons.my_location, color: Color(0xFF2A52C9), size: 30),
+                      child: _isRouteActive
+                          ? Image.asset('assets/images/bus_icon.png', width: 60, height: 60)
+                          : const Icon(
+                              Icons.location_on,
+                              color: Colors.red,
+                              size: 40.0,
+                            ),
                     ),
-                  if (_destinationLocation != null)
+                  ],
+                ),
+              // Show destination marker if selected
+              if (_destinationLocation != null)
+                MarkerLayer(
+                  markers: [
                     Marker(
+                      width: 40.0,
+                      height: 40.0,
                       point: _destinationLocation!,
-                      width: 40,
-                      height: 40,
-                      child: const Icon(Icons.location_on, color: Color(0xFF9CB3F9), size: 30),
+                      child: const Icon(
+                        Icons.location_on,
+                        color: Colors.green,
+                        size: 40.0,
+                      ),
                     ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
 
@@ -294,25 +355,15 @@ class _HomePage2State extends State<HomePage2> {
                         width: double.infinity,
                         height: 56,
                         child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => TripsRoute(
-                                  departure: _departureController.text,
-                                  arrival: _arrivalController.text,
-                                ),
-                              ),
-                            );
-                          },
+                          onPressed: _isRouteActive ? _endCurrentRoute : _startNewRoute,
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF2A52C9),
+                            backgroundColor: _isRouteActive ? Colors.red : const Color(0xFF2A52C9),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(16),
                             ),
                           ),
                           child: Text(
-                            'Confirm Route',
+                            _isRouteActive ? 'End Route' : 'Start Route',
                             style: TextStyle(
                               color: Colors.white,
                               fontSize: 18,
@@ -321,6 +372,40 @@ class _HomePage2State extends State<HomePage2> {
                           ),
                         ),
                       ),
+                      if (!_isRouteActive) ...[
+                        const SizedBox(height: 16),
+                        SizedBox(
+                          width: double.infinity,
+                          height: 56,
+                          child: OutlinedButton(
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (context) => TripsRoute(
+                                    departure: _departureController.text,
+                                    arrival: _arrivalController.text,
+                                  ),
+                                ),
+                              );
+                            },
+                            style: OutlinedButton.styleFrom(
+                              side: BorderSide(color: const Color(0xFF2A52C9)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                            ),
+                            child: Text(
+                              'View Route Details',
+                              style: TextStyle(
+                                color: const Color(0xFF2A52C9),
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -334,8 +419,102 @@ class _HomePage2State extends State<HomePage2> {
 
   @override
   void dispose() {
+    // Remove listener
+    try {
+      final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+      realtimeProvider.removeListener(_onRealtimeProviderUpdate);
+    } catch (e) {
+      // Provider might not be available during dispose
+      print('Error removing listener: $e');
+    }
+    
     _departureController.dispose();
     _arrivalController.dispose();
     super.dispose();
+  }
+
+  // Start a new route
+  Future<void> _startNewRoute() async {
+    if (_departureController.text.isEmpty || _arrivalController.text.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select departure and destination stations')),
+      );
+      return;
+    }
+    
+    try {
+      // Get current user ID (driver ID)
+      final driverId = _supabase.auth.currentUser?.id;
+      if (driverId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('You need to be logged in to start a route')),
+        );
+        return;
+      }
+      
+      // Get assigned bus ID for this driver
+      final busResponse = await _supabase
+          .from('drivers')
+          .select('bus_id')
+          .eq('user_id', driverId)
+          .maybeSingle();
+      
+      final busId = busResponse?['bus_id'];
+      if (busId == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No bus assigned to this driver')),
+        );
+        return;
+      }
+      
+      // Start the route using RealtimeProvider
+      final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+      final success = await realtimeProvider.startRoute(
+        driverId,
+        busId,
+        _departureController.text,
+        _arrivalController.text,
+      );
+      
+      if (success) {
+        setState(() {
+          _isRouteActive = true;
+        });
+        
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Route started successfully')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to start route')),
+        );
+      }
+    } catch (e) {
+      print('Error starting route: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error starting route: $e')),
+      );
+    }
+  }
+
+  // End the current route
+  Future<void> _endCurrentRoute() async {
+    try {
+      final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
+      await realtimeProvider.endRoute();
+      
+      setState(() {
+        _isRouteActive = false;
+      });
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Route ended successfully')),
+      );
+    } catch (e) {
+      print('Error ending route: $e');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error ending route: $e')),
+      );
+    }
   }
 }

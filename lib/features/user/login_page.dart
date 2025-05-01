@@ -43,6 +43,24 @@ class _LoginPageState extends State<LoginPage> {
               'This email is not registered. Please sign up first or use a different email address.'
             );
           }
+
+          // Check if user is a driver and has completed registration
+          if (widget.userType == 'driver') {
+            final driverData = await supabase
+                .from('drivers')
+                .select('*')
+                .eq('email_driver', emailController.text.trim())
+                .maybeSingle();
+
+            if (driverData == null) {
+              // Driver exists but hasn't completed registration
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const AddInformationPage()),
+              );
+              return;
+            }
+          }
         } catch (e) {
           if (e is PostgrestException) {
             print('Error checking email: ${e.message}');
@@ -67,7 +85,7 @@ class _LoginPageState extends State<LoginPage> {
           throw Exception('Please confirm your email before logging in.');
         }
 
-        // Fetch user data from Supabase
+        // جلب بيانات المستخدم من Supabase
         final session = supabase.auth.currentSession;
         final userData = session?.user.userMetadata;
         final userType = userData?['user_type'] as String?;
@@ -79,7 +97,7 @@ class _LoginPageState extends State<LoginPage> {
         await _checkAndInsertUserData(user, userType);
 
         if (userType == null) {
-          // First-time login, user hasn't selected type yet
+          // المستخدم يسجل الدخول لأول مرة ولم يحدد نوعه بعد
           print('First-time login detected. Redirecting to role selection.');
           if (!context.mounted) return;
           Navigator.pushReplacement(
@@ -93,7 +111,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
           );
         } else {
-          // User has a registered type, redirect accordingly
+          // المستخدم لديه نوع مسجل، الانتقال بناءً على النوع
           print('Existing user detected with type: $userType. Redirecting accordingly.');
           if (!context.mounted) return;
           if (userType == 'passenger') {
@@ -141,7 +159,7 @@ class _LoginPageState extends State<LoginPage> {
           emailRedirectTo: 'bus_app://auth/callback',
           data: {
             'phone': phoneController.text.trim(),
-            'user_type': null, // Type not set yet, will be set later
+            'user_type': null, // لم يتم تحديد النوع بعد، سيتم تحديده لاحقًا
           },
         );
 
@@ -176,7 +194,7 @@ class _LoginPageState extends State<LoginPage> {
           _showMessage('Registration successful! Please check your email to confirm your account.', Colors.green);
           
           setState(() {
-            isLogin = true; // Switch to login mode
+            isLogin = true; // التبديل إلى وضع تسجيل الدخول
           });
         }
       }

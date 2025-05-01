@@ -27,30 +27,8 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>> _stations = [];
   bool _showOnlyMoving = false;
 
-  // This will be replaced with real-time data
-  final List<Map<String, dynamic>> _mockBuses = [
-    {
-      'busNumber': '101',
-      'destination': 'Nearby Municipalities Station',
-      'currentSpeed': '50 km/h',
-      'busImage': 'assets/images/busd.png',
-      'expectedArrivalTime': '10 min',
-      'driverName': 'John Doe',
-      'finalDestination': 'Central Station',
-      'position': LatLng(27.874, -0.285),
-    },
-    {
-      'busNumber': '202',
-      'destination': 'Distant Municipalities Station',
-      'currentSpeed': '45 km/h',
-      'busImage': 'assets/images/busd.png',
-      'expectedArrivalTime': '15 min',
-      'driverName': 'Jane Smith',
-      'finalDestination': 'North Station',
-      'position': LatLng(27.882, -0.281),
-    },
-  ];
-
+  // Bus data
+  List<Map<String, dynamic>> _activeBuses = [];
   Map<String, dynamic>? _selectedBus;
   String? _selectedStationName;
 
@@ -91,19 +69,15 @@ class _HomePageState extends State<HomePage> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkForDelays();
       _fetchActiveBuses();
-      _fetchStations();
     });
   }
 
   Future<void> _fetchActiveBuses() async {
     final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
-    setState(() {});
     
-    // Listen for changes in active buses
-    realtimeProvider.addListener(() {
-      if (mounted) {
-        setState(() {});
-      }
+    // Get initial active buses
+    setState(() {
+      _activeBuses = realtimeProvider.activeBuses;
     });
   }
 
@@ -346,15 +320,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showBusDetails(Map<String, dynamic> bus) async {
+    setState(() {
+      _selectedBus = bus;
+    });
+
     final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
-    
-    // Get driver info for the bus
-    final driverInfo = await realtimeProvider.getDriverInfoForBus(bus['id']);
+    final driverInfo = await realtimeProvider.getDriverInfoForBus(bus['bus_id']);
     
     // Get bus photo
     String? busPhotoBase64;
-    if (driverInfo != null && driverInfo['bus_photo'] != null) {
-      busPhotoBase64 = await realtimeProvider.getBusPhoto(bus['id']);
+    try {
+      busPhotoBase64 = await realtimeProvider.getBusPhoto(bus['bus_id']);
+    } catch (e) {
+      print('Error getting bus photo: $e');
     }
     
     if (!mounted) return;
@@ -457,6 +435,18 @@ class _HomePageState extends State<HomePage> {
                 Text('$expectedArrivalText: $eta'),
                 Text('$driverText: $driverName'),
                 Text('$finalDestinationText: ${bus['destination']}'),
+                Text(
+                  'Speed: ${(_selectedBus!['speed'] ?? 0) * 3.6} km/h',
+                  style: const TextStyle(
+                    fontSize: 14,
+                  ),
+                ),
+                Text(
+                  'Updated: ${_formatTimestamp(_selectedBus!['timestamp'] ?? DateTime.now().toIso8601String())}',
+                  style: const TextStyle(
+                    fontSize: 14,
+                  ),
+                ),
               ],
             ),
           ),
@@ -479,24 +469,28 @@ class _HomePageState extends State<HomePage> {
     final realtimeProvider = Provider.of<RealtimeProvider>(context);
     final realBuses = realtimeProvider.activeBuses;
     
-    // Convert real-time bus data to map markers
-    final List<Map<String, dynamic>> busesForMap = realBuses.isNotEmpty 
-        ? realBuses.map((bus) => {
-            'id': bus['id'],
-            'destination': bus['destination'] ?? 'Unknown',
-            'speed': bus['speed'] ?? 0,
-            'eta_to_destination': bus['eta_to_destination'] ?? 15,
-            'position': LatLng(
-              bus['latitude'] ?? 0.0,
-              bus['longitude'] ?? 0.0,
-            ),
+    // Get real-time bus data from provider
+    
+    // Get active buses from the realtime provider
+    _activeBuses = realtimeProvider.activeBuses;
+    
+    // Convert bus data to include LatLng position for map markers
+    final buses = _activeBuses.isNotEmpty
+        ? _activeBuses.map((bus) {
+            return {
+              ...bus,
+              'position': LatLng(
+                bus['latitude'] ?? 0.0,
+                bus['longitude'] ?? 0.0,
+              ),
+            };
           }).toList()
-        : _mockBuses; // Fallback to mock data if no real buses
+        : []; // Fallback to empty list if no real buses
     
     // Show moving buses if refreshed, else filter by station
     final filteredBuses = _showOnlyMoving
-        ? busesForMap.where((bus) => (bus['speed'] ?? 0) > 0).toList()
-        : busesForMap.where((bus) {
+        ? buses.where((bus) => (bus['speed'] ?? 0) > 0).toList()
+        : buses.where((bus) {
             return _selectedStationName == null ||
                    bus['destination'] == _selectedStationName;
           }).toList();
@@ -588,15 +582,7 @@ class _HomePageState extends State<HomePage> {
                       height: 40,
                       child: GestureDetector(
                         onTap: () => _showBusDetails(bus),
-                        child: SizedBox(
-                          width: 40,
-                          height: 40,
-                          child: Image.asset(
-                            'assets/images/bus_icon.png',
-                            width: 20,
-                            height: 20,
-                          ),
-                        ),
+                        child: Image.asset('assets/images/bus_marker.png'),
                       ),
                     ),
                   ),
@@ -730,5 +716,28 @@ class _HomePageState extends State<HomePage> {
       _selectedStationName = null;
       _showOnlyMoving = true;
     });
+    _fetchActiveBuses();
   }
+  
+  // Format timestamp for display
+  String _formatTimestamp(String timestamp) {
+    try {
+      final dateTime = DateTime.parse(timestamp).toLocal();
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+      
+      if (difference.inMinutes < 1) {
+        return 'Just now';
+      } else if (difference.inHours < 1) {
+        return '${difference.inMinutes} min ago';
+      } else if (difference.inDays < 1) {
+        return '${difference.inHours} hours ago';
+      } else {
+        return '${dateTime.day}/${dateTime.month} ${dateTime.hour}:${dateTime.minute}';
+      }
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
 }

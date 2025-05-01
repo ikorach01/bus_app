@@ -543,32 +543,24 @@ class _TripsRouteState extends State<TripsRoute> {
       print('Ending trip...');
       
       // Call the endRoute method in the realtime provider
-      final success = await realtimeProvider.endRoute();
+      await realtimeProvider.endRoute();
       
-      print('endRoute result: $success');
+      print('Trip ended');
       
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Trip ended successfully'),
-            backgroundColor: Colors.green,
-          ),
-        );
-        
-        // Navigate back to the home page
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const HomePage2(),
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Failed to end trip'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Trip ended successfully'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      
+      // Navigate back to the home page
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => const HomePage2(),
+        ),
+      );
     } catch (e) {
       print('Error ending trip: $e');
       print('Stack trace: ${StackTrace.current}');
