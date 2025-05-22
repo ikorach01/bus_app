@@ -178,23 +178,35 @@ class _MyAppState extends State<MyApp> {
           
           // 2. إذا لم يكن لدينا معلومات في SharedPreferences، التحقق من جدول drivers
           try {
-            print('Checking drivers table');
+            print('Checking drivers table for user ID: ${user.id}');
             final driverResponse = await Supabase.instance.client
                 .from('drivers')
-                .select('id')
+                .select('*')  // Select all fields for better verification
                 .eq('id', user.id)
                 .maybeSingle();
                 
             if (driverResponse != null) {
-              // تم العثور على السائق
-              print('Driver record found in drivers table');
-              await prefs.setBool('driver_${user.id}_registered', true);
-              await prefs.setBool('passenger_${user.id}_registered', false);
-              _setInitialScreen(const HomePage2());
-              return;
+              // التحقق من أن السجل نشط
+              final isActive = driverResponse['is_active'] as bool? ?? true;
+              print('Driver record found. Active: $isActive');
+              
+              if (isActive) {
+                // السائق مسجل ونشط
+                await prefs.setBool('driver_${user.id}_registered', true);
+                await prefs.setBool('passenger_${user.id}_registered', false);
+                _setInitialScreen(const HomePage2());
+                print('Redirecting to HomePage2 for registered driver');
+                return;
+              } else {
+                print('Driver account is inactive');
+              }
             }
           } catch (e) {
             print('Error checking drivers table: $e');
+            if (e is PostgrestException) {
+              print('Postgrest error details: ${e.details}');
+              print('Postgrest error code: ${e.code}');
+            }
           }
           
           // 3. التحقق من البيانات الوصفية

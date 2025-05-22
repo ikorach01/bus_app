@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": ".."
+		},
+		{
+			"path": "../../bus_app_admin - Copie (2)/bus_app_admin - Copie (2)"
+		}
+	],
+	"settings": {
+		"dart.projectSearchDepth": 5,
+		"java.configuration.updateBuildConfiguration": "interactive"
+	}
+}

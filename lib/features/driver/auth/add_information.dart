@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
+import 'dart:io';
 import 'basic_info.dart';
 import 'driver_licence.dart';
 import 'vehicle_info.dart';
@@ -55,6 +56,8 @@ class _AddInformationPageState extends State<AddInformationPage> {
   }
 
   Future<void> _submitInformation() async {
+    if (!_validateDriverData()) return;
+
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -65,7 +68,26 @@ class _AddInformationPageState extends State<AddInformationPage> {
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception('User not authenticated');
 
-      // 1. First create the driver without bus_id
+      // 1. Check if a bus with this plate already exists
+      try {
+        final existingBus = await supabase
+            .from('buses')
+            .select('id, driver_id')
+            .eq('vehicle_registration_plate', _driverData['vehicle_registration_plate'])
+            .maybeSingle();
+
+        // If bus exists and belongs to another driver
+        if (existingBus != null && existingBus['driver_id'] != null && existingBus['driver_id'] != user.id) {
+          Navigator.pop(context); // Close loading dialog
+          _showErrorMessage('This vehicle registration plate is already registered by another driver');
+          return;
+        }
+      } catch (e) {
+        debugPrint('Error checking existing bus: $e');
+        // Continue with registration process as the error might be due to non-existing record
+      }
+
+      // 2. Create driver entry with retry mechanism
       final driverData = {
         'id': user.id,
         'user_id': user.id,
@@ -85,13 +107,13 @@ class _AddInformationPageState extends State<AddInformationPage> {
         'created_at': DateTime.now().toIso8601String(),
       };
 
-      await supabase
+      await _retryOperation(() => supabase
           .from('drivers')
           .upsert(driverData, onConflict: 'id')
           .select()
-          .single();
+          .maybeSingle());
 
-      // 2. Then create the bus with driver_id
+      // 3. Create bus with driver_id, with retry mechanism
       final busData = {
         'bus_name': _driverData['bus_name'],
         'vehicle_registration_plate': _driverData['vehicle_registration_plate'],
@@ -99,29 +121,42 @@ class _AddInformationPageState extends State<AddInformationPage> {
         'driver_id': user.id,
       };
 
-      final busResponse = await supabase
+      final busResponse = await _retryOperation(() => supabase
           .from('buses')
           .upsert(busData, onConflict: 'vehicle_registration_plate')
           .select()
-          .single();
+          .maybeSingle());
 
-      // 3. Update driver with bus_id
-      await supabase
+      if (busResponse == null) {
+        throw Exception('Failed to create bus record');
+      }
+
+      // 4. Update driver with bus_id, with retry mechanism
+      await _retryOperation(() => supabase
           .from('drivers')
           .update({'bus_id': busResponse['id']})
-          .eq('id', user.id);
+          .eq('id', user.id));
 
-      // Clear saved data
+      // 5. Set user role in metadata and SharedPreferences
+      await _retryOperation(() => supabase.auth.updateUser(UserAttributes(
+            data: {'role': 'driver'},
+          )));
+
+      // Save role in SharedPreferences for faster app startup
       final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_role', 'driver');
+      
+      // Clear saved form data
       await prefs.remove('driver_data');
 
-      Navigator.pop(context);
+      Navigator.pop(context); // Close loading dialog
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(builder: (context) => const HomePage2()),
       );
     } catch (e) {
-      Navigator.pop(context);
+      debugPrint('Registration error: $e');
+      Navigator.pop(context); // Close loading dialog
       _showErrorMessage('Registration failed: ${e.toString()}');
     }
   }
@@ -162,12 +197,39 @@ class _AddInformationPageState extends State<AddInformationPage> {
       SnackBar(
         content: Text(message),
         backgroundColor: Colors.red,
+        duration: const Duration(seconds: 8),
         action: SnackBarAction(
           label: 'OK',
           onPressed: () => ScaffoldMessenger.of(context).hideCurrentSnackBar(),
         ),
       ),
     );
+  }
+  
+  // Retry operation with exponential backoff
+  Future<T?> _retryOperation<T>(Future<T> Function() operation, {int maxRetries = 3}) async {
+    int retryCount = 0;
+    int waitTime = 1000; // Start with 1 second
+    
+    while (retryCount < maxRetries) {
+      try {
+        return await operation();
+      } catch (e) {
+        retryCount++;
+        if (retryCount >= maxRetries) rethrow;
+        
+        // Exponential backoff with jitter
+        final jitter = (waitTime * 0.2 * (DateTime.now().millisecondsSinceEpoch % 10) / 10).toInt();
+        final waitTimeWithJitter = waitTime + jitter;
+        
+        debugPrint('Operation failed (attempt $retryCount): $e. Retrying in ${waitTimeWithJitter}ms...');
+        await Future.delayed(Duration(milliseconds: waitTimeWithJitter));
+        
+        // Double the wait time for next retry
+        waitTime *= 2;
+      }
+    }
+    return null;
   }
 
   @override

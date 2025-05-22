@@ -1,0 +1,2 @@
+C:/Users/pc/bus_app - Copie (21) - Copie - Copie - Copie/android/app/.cxx/Debug/2i1y4ix2/armeabi-v7a/CMakeFiles/edit_cache.dir
+C:/Users/pc/bus_app - Copie (21) - Copie - Copie - Copie/android/app/.cxx/Debug/2i1y4ix2/armeabi-v7a/CMakeFiles/rebuild_cache.dir

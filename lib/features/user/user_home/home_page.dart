@@ -4,10 +4,10 @@ import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import 'package:bus_app/providers/settings_provider.dart';
 import 'package:bus_app/features/user/settings_page.dart';
-import 'package:bus_app/features/driver/driver_home/realtime_provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 class HomePage extends StatefulWidget {
@@ -27,10 +27,13 @@ class _HomePageState extends State<HomePage> {
   List<Map<String, dynamic>> _stations = [];
   bool _showOnlyMoving = false;
 
-  // Bus data
-  List<Map<String, dynamic>> _activeBuses = [];
+  // Bus data - using Map to ensure only one position per bus
+  final Map<String, Map<String, dynamic>> _busPositions = {};
   Map<String, dynamic>? _selectedBus;
   String? _selectedStationName;
+
+  // Supabase subscription
+  StreamSubscription<dynamic>? _busPositionsSubscription;
 
   // Helper method to validate coordinates
   LatLng _validateCoordinates(double? lat, double? lng) {
@@ -66,6 +69,7 @@ class _HomePageState extends State<HomePage> {
     _mapController = MapController();
     _getUserLocation();
     _fetchStations();
+    _setupBusPositionsSubscription();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _checkForDelays();
       _fetchActiveBuses();
@@ -73,12 +77,54 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _fetchActiveBuses() async {
-    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
-    
-    // Get initial active buses
-    setState(() {
-      _activeBuses = realtimeProvider.activeBuses;
-    });
+    // Clear previous positions first
+    if (mounted) {
+      setState(() {
+        _busPositions.clear();
+      });
+    }
+    try {
+      final data = await Supabase.instance.client
+          .from('bus_positions')
+          .select('''
+            *,
+            buses!inner(*),
+            driver_routes!inner(*)
+          ''')
+          .order('timestamp', ascending: false)
+          .limit(50);
+
+      final buses = data.map((bus) => {
+        'bus_id': bus['bus_id'],
+        'route_id': bus['route_id'],
+        'latitude': bus['latitude'],
+        'longitude': bus['longitude'],
+        'speed': bus['speed'],
+        'heading': bus['heading'],
+        'timestamp': bus['timestamp'],
+        'bus_name': bus['buses']['bus_name'],
+        'route_name': bus['driver_routes']['route_name'],
+        'destination': bus['driver_routes']['destination'],
+      }).toList();
+
+      // Store only the latest position for each bus
+      final Map<String, Map<String, dynamic>> newPositions = {};
+      for (final bus in buses) {
+        final busId = bus['bus_id'];
+        if (busId != null) {
+          newPositions[busId] = bus;
+        }
+      }
+      
+      if (mounted) {
+        setState(() {
+          _busPositions.clear(); // Clear old positions
+          _busPositions.addAll(newPositions); // Add only the latest positions
+        });
+      }
+    } catch (e) {
+      print('Error fetching active buses: $e');
+    }
   }
 
   Future<void> _checkForDelays() async {
@@ -194,16 +240,12 @@ class _HomePageState extends State<HomePage> {
       final data = await Supabase.instance.client
           .from('stations')
           .select('name, latitude, longitude');
-      if (data is List) {
-        final stations = data.map((e) => {
-          'name': e['name'],
-          'lat': double.tryParse(e['latitude']) ?? 0.0,
-          'lon': double.tryParse(e['longitude']) ?? 0.0,
-        }).toList();
-        setState(() => _stations = stations);
-      } else {
-        print('Unexpected stations data: $data');
-      }
+      final stations = data.map((e) => {
+        'name': e['name'],
+        'lat': double.tryParse(e['latitude']) ?? 0.0,
+        'lon': double.tryParse(e['longitude']) ?? 0.0,
+      }).toList();
+      setState(() => _stations = stations);
     } catch (e) {
       print('Exception fetching stations: $e');
     }
@@ -320,163 +362,283 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _showBusDetails(Map<String, dynamic> bus) async {
-    setState(() {
-      _selectedBus = bus;
-    });
-
-    final realtimeProvider = Provider.of<RealtimeProvider>(context, listen: false);
-    final driverInfo = await realtimeProvider.getDriverInfoForBus(bus['bus_id']);
-    
-    // Get bus photo
-    String? busPhotoBase64;
     try {
-      busPhotoBase64 = await realtimeProvider.getBusPhoto(bus['bus_id']);
-    } catch (e) {
-      print('Error getting bus photo: $e');
-    }
-    
-    if (!mounted) return;
-    
-    showDialog(
-      context: context,
-      builder: (context) {
-        // Get the current locale
-        final isArabic = Localizations.localeOf(context).languageCode == 'ar';
-        
-        // Translate strings based on locale
-        final busText = isArabic ? 'حافلة' : 'Bus';
-        final destinationText = isArabic ? 'الوجهة' : 'Destination';
-        final speedText = isArabic ? 'السرعة' : 'Speed';
-        final expectedArrivalText = isArabic ? 'وقت الوصول المتوقع' : 'Expected Arrival';
-        final driverText = isArabic ? 'السائق' : 'Driver';
-        final finalDestinationText = isArabic ? 'الوجهة النهائية' : 'Final Destination';
-        final closeText = isArabic ? 'إغلاق' : 'Close';
-        
-        // Format driver name
-        final String driverName = driverInfo != null 
-            ? '${driverInfo['first_name']} ${driverInfo['last_name']}'
-            : 'Unknown';
-        
-        // Format bus name
-        final String busName = driverInfo != null && driverInfo['bus_name'] != null
-            ? driverInfo['bus_name']
-            : bus['id'].toString();
-        
-        // Format speed
-        final String speed = '${bus['speed']} km/h';
-        
-        // Format ETA
-        final String eta = '${bus['eta_to_destination']} min';
-        
-        return AlertDialog(
-          title: Text('$busText $busName'),
+      // First fetch the route details
+      final routeData = await Supabase.instance.client
+          .from('driver_routes')
+          .select()
+          .eq('id', bus['route_id'])
+          .maybeSingle();
+
+      if (routeData == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Route information not found'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      // Fetch bus name from buses table
+      final busData = await Supabase.instance.client
+          .from('buses')
+          .select('bus_name')
+          .eq('id', bus['bus_id'])
+          .maybeSingle();
+
+      // Then fetch the driver details separately
+      final driverData = await Supabase.instance.client
+          .from('drivers')
+          .select('first_name, last_name')
+          .eq('id', routeData['driver_id'])
+          .maybeSingle();
+
+      if (driverData == null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Driver information not found'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Bus Trip Details'),
           content: SingleChildScrollView(
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: busPhotoBase64 != null
-                      ? Image.memory(
-                          base64Decode(busPhotoBase64),
-                          height: 150,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            print('Error loading image: $error');
-                            return Container(
-                              height: 150,
-                              width: double.infinity,
-                              color: Colors.grey[300],
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.directions_bus, size: 50, color: Colors.grey[600]),
-                                    const SizedBox(height: 8),
-                                    Text(isArabic ? 'لا يمكن تحميل الصورة' : 'Image not available',
-                                        style: TextStyle(color: Colors.grey[600])),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        )
-                      : Image.asset(
-                          'assets/images/busd.png',
-                          height: 150,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            print('Error loading image: $error');
-                            return Container(
-                              height: 150,
-                              width: double.infinity,
-                              color: Colors.grey[300],
-                              child: Center(
-                                child: Column(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: [
-                                    Icon(Icons.directions_bus, size: 50, color: Colors.grey[600]),
-                                    const SizedBox(height: 8),
-                                    Text(isArabic ? 'لا يمكن تحميل الصورة' : 'Image not available',
-                                        style: TextStyle(color: Colors.grey[600])),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                ),
-                const SizedBox(height: 10),
-                Text('$destinationText: ${bus['destination']}'),
-                Text('$speedText: $speed'),
-                Text('$expectedArrivalText: $eta'),
-                Text('$driverText: $driverName'),
-                Text('$finalDestinationText: ${bus['destination']}'),
-                Text(
-                  'Speed: ${(_selectedBus!['speed'] ?? 0) * 3.6} km/h',
-                  style: const TextStyle(
-                    fontSize: 14,
+                if (busData != null && busData['bus_photo'] != null) ...[
+                  Center(
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.network(
+                        busData['bus_photo'],
+                        height: 200,
+                        width: double.infinity,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Container(
+                            height: 200,
+                            width: double.infinity,
+                            color: Colors.grey[300],
+                            child: const Icon(Icons.error_outline, size: 50),
+                          );
+                        },
+                      ),
+                    ),
                   ),
-                ),
-                Text(
-                  'Updated: ${_formatTimestamp(_selectedBus!['timestamp'] ?? DateTime.now().toIso8601String())}',
-                  style: const TextStyle(
-                    fontSize: 14,
-                  ),
-                ),
+                  const SizedBox(height: 16),
+                ],
+                _infoRow('Start Station:', routeData['start_station']?.toString() ?? 'N/A'),
+                const SizedBox(height: 8),
+                _infoRow('End Station:', routeData['end_station']?.toString() ?? 'N/A'),
+                const SizedBox(height: 8),
+                _infoRow('Start Time:', routeData['start_time'] != null 
+                  ? _formatTimestamp(routeData['start_time'].toString()) 
+                  : 'N/A'),
+                const SizedBox(height: 8),
+                _infoRow('Current Location:', 
+                  bus['latitude'] != null && bus['longitude'] != null
+                    ? '${bus['latitude'].toStringAsFixed(6)}, ${bus['longitude'].toStringAsFixed(6)}'
+                    : 'N/A'),
+                const SizedBox(height: 8),
+                _infoRow('Bus Name:', busData?['bus_name'] ?? 'N/A'),
+                const SizedBox(height: 8),
+                _infoRow('Driver:', 
+                  '${driverData?['first_name'] ?? ''} ${driverData?['last_name'] ?? ''}'.trim().isNotEmpty 
+                    ? '${driverData?['first_name'] ?? ''} ${driverData?['last_name'] ?? ''}'.trim()
+                    : 'N/A'),
+                const SizedBox(height: 8),
+                _infoRow('Bus:', driverData['bus_name']?.toString() ?? 'N/A'),
               ],
             ),
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(context);
-              },
-              child: Text(closeText),
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
             ),
           ],
-        );
-      },
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error loading bus details: ${e.toString()}'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  Widget _infoRow(String label, String value) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: 120,
+          child: Text(
+            label,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500, color: Colors.grey),
+          ),
+        ),
+        Expanded(
+          child: Text(
+            value,
+            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500),
+          ),
+        ),
+      ],
     );
+  }
+
+  // Helper method to format timestamp for display
+  String _formatTimestamp(String timestamp) {
+    try {
+      final dateTime = DateTime.parse(timestamp).toLocal();
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+      
+      if (difference.inMinutes < 1) {
+        return 'Just now';
+      } else if (difference.inHours < 1) {
+        return '${difference.inMinutes} min ago';
+      } else if (difference.inDays < 1) {
+        return '${difference.inHours} hours ago';
+      } else {
+        return '${dateTime.day}/${dateTime.month} ${dateTime.hour}:${dateTime.minute}';
+      }
+    } catch (e) {
+      return 'Unknown';
+    }
+  }
+
+  Future<void> _setupBusPositionsSubscription() async {
+    try {
+      // Cancel any existing subscription
+      _busPositionsSubscription?.cancel();
+      
+      // Clear any existing bus positions first
+      if (mounted) {
+        setState(() {
+          _busPositions.clear();
+        });
+      }
+      
+      // Set up the subscription for real-time updates
+      _busPositionsSubscription = Supabase.instance.client
+        .from('bus_positions')
+        .stream(primaryKey: ['id'])
+        .order('timestamp', ascending: false)
+        .map<List<Map<String, dynamic>>>((data) {
+          return data
+            .where((bus) => 
+                bus['latitude'] != null && 
+                bus['longitude'] != null && 
+                bus['bus_id'] != null)
+            .map((bus) => {
+              'bus_id': bus['bus_id'],
+              'route_id': bus['route_id'],
+              'timestamp': bus['timestamp'],
+              'latitude': bus['latitude'],
+              'longitude': bus['longitude'],
+              'speed': bus['speed'] ?? 0.0,
+              'heading': bus['heading'] ?? 0.0,
+              'bus_number': bus['buses']?['bus_number'] ?? 'Unknown',
+              'route_name': bus['driver_routes']?['route_name'] ?? 'Unknown',
+              'destination': bus['driver_routes']?['destination'] ?? 'Unknown',
+            }).toList();
+        })
+        .listen(
+          (List<Map<String, dynamic>> buses) async {
+            if (!mounted) return;
+            
+            try {
+              // Process incoming bus positions
+              final Map<String, Map<String, dynamic>> newPositions = {};
+              
+              // Only keep the latest position for each bus
+              for (final bus in buses) {
+                final busId = bus['bus_id'];
+                if (busId != null) {
+                  // Only add/update if this is a newer position
+                  final existingBus = _busPositions[busId];
+                  if (existingBus == null || 
+                      bus['timestamp'].toString().compareTo(existingBus['timestamp'].toString()) > 0) {
+                    newPositions[busId] = bus;
+                  }
+                }
+              }
+              
+              // Only update state if we have new positions
+              if (newPositions.isNotEmpty) {
+                setState(() {
+                  // Update the bus positions with only the latest data
+                  _busPositions.addAll(newPositions);
+                });
+              }
+            } catch (e) {
+              print('Error updating bus positions: $e');
+            }
+          },
+          onError: (error) async {
+            print('Error in bus positions subscription: $error');
+            // Wait before retrying
+            await Future.delayed(const Duration(seconds: 5));
+            if (mounted) {
+              await _setupBusPositionsSubscription();
+            }
+          },
+          onDone: () {
+            print('Bus positions subscription ended');
+            if (mounted) {
+              _setupBusPositionsSubscription();
+            }
+          },
+        );
+    } catch (e) {
+      print('Error setting up bus positions subscription: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error connecting to bus tracking service')),
+        );
+      }
+    }
+  }
+
+  // This method is no longer needed as we're using a Map to manage bus positions
+  // and directly updating the state when we receive new data
+  // Keeping an empty implementation to avoid breaking existing code references
+  bool _shouldUpdateState(List<Map<String, dynamic>> newBuses) {
+    // Always return true to ensure state updates
+    return true;
+  }
+
+  @override
+  void dispose() {
+    _busPositionsSubscription?.cancel();
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Get real-time bus data
-    final realtimeProvider = Provider.of<RealtimeProvider>(context);
-    final realBuses = realtimeProvider.activeBuses;
-    
-    // Get real-time bus data from provider
-    
-    // Get active buses from the realtime provider
-    _activeBuses = realtimeProvider.activeBuses;
+    // Get real-time bus data from state - use values to get a list
+    final realBuses = _busPositions.values.toList();
     
     // Convert bus data to include LatLng position for map markers
-    final buses = _activeBuses.isNotEmpty
-        ? _activeBuses.map((bus) {
+    final buses = realBuses.isNotEmpty
+        ? realBuses.map((bus) {
             return {
               ...bus,
               'position': LatLng(
@@ -485,9 +647,9 @@ class _HomePageState extends State<HomePage> {
               ),
             };
           }).toList()
-        : []; // Fallback to empty list if no real buses
+        : []; // Empty list if no buses
     
-    // Show moving buses if refreshed, else filter by station
+    // Show moving buses if toggled, else filter by selected station
     final filteredBuses = _showOnlyMoving
         ? buses.where((bus) => (bus['speed'] ?? 0) > 0).toList()
         : buses.where((bus) {
@@ -498,7 +660,7 @@ class _HomePageState extends State<HomePage> {
     return Scaffold(
       body: Stack(
         children: [
-          if (realBuses.isEmpty)
+          if (_busPositions.isEmpty)
             Positioned(
               top: 100,
               left: 0,
@@ -578,11 +740,69 @@ class _HomePageState extends State<HomePage> {
                   ...filteredBuses.map(
                     (bus) => Marker(
                       point: bus['position'],
-                      width: 40,
-                      height: 40,
+                      width: 60,
+                      height: 60,
                       child: GestureDetector(
-                        onTap: () => _showBusDetails(bus),
-                        child: Image.asset('assets/images/bus_marker.png'),
+                        onTap: () async {
+                          try {
+                            // Show loading indicator
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Row(
+                                  children: [
+                                    CircularProgressIndicator(),
+                                    SizedBox(width: 16),
+                                    Text('Loading trip details...'),
+                                  ],
+                                ),
+                                backgroundColor: Colors.blue,
+                              ),
+                            );
+
+                            // Fetch trip details
+                            await _showBusDetails(bus);
+
+                            // Remove loading indicator
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).hideCurrentSnackBar();
+                          } catch (e) {
+                            if (!mounted) return;
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Error loading trip details: ${e.toString()}'),
+                                backgroundColor: Colors.red,
+                              ),
+                            );
+                          }
+                        },
+                        child: Stack(
+                          alignment: Alignment.center,
+                          children: [
+                            Image.asset('assets/images/bus-station.png',
+                              width: 60,
+                              height: 60,
+                            ),
+                            Positioned(
+                              bottom: 0,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.blue,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  bus['bus_number'] ?? 'N/A',
+                                  style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -718,26 +938,4 @@ class _HomePageState extends State<HomePage> {
     });
     _fetchActiveBuses();
   }
-  
-  // Format timestamp for display
-  String _formatTimestamp(String timestamp) {
-    try {
-      final dateTime = DateTime.parse(timestamp).toLocal();
-      final now = DateTime.now();
-      final difference = now.difference(dateTime);
-      
-      if (difference.inMinutes < 1) {
-        return 'Just now';
-      } else if (difference.inHours < 1) {
-        return '${difference.inMinutes} min ago';
-      } else if (difference.inDays < 1) {
-        return '${difference.inHours} hours ago';
-      } else {
-        return '${dateTime.day}/${dateTime.month} ${dateTime.hour}:${dateTime.minute}';
-      }
-    } catch (e) {
-      return 'Unknown';
-    }
-  }
-
 }

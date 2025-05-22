@@ -163,10 +163,15 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
       appBar: AppBar(
         title: const Text('Vehicle Information', style: TextStyle(color: Colors.white)),
         backgroundColor: const Color(0xFF9CB3F9),
+        elevation: 0,
       ),
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           gradient: LinearGradient(
+            begin: Alignment(-0.20, -0.98),
+            end: Alignment(0.2, 0.98),
             colors: [Color(0xFF9CB3F9), Color(0xFF2A52C9), Color(0xFF14202E)],
           ),
         ),
@@ -187,6 +192,7 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
                         color: Colors.white.withOpacity(0.2),
+                        width: 1,
                       ),
                     ),
                     child: _busImage != null || imageBytes != null
@@ -262,6 +268,7 @@ class _VehicleInfoPageState extends State<VehicleInfoPage> {
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
+                    elevation: 2,
                   ),
                   child: const Text(
                     'Save Vehicle Information',

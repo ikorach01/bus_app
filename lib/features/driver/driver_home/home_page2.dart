@@ -4,7 +4,6 @@ import 'package:latlong2/latlong.dart';
 import 'package:location/location.dart';
 import 'package:provider/provider.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'trips_route.dart';
 import 'settings2.dart';
 import 'departure2.dart';
 import 'destination2.dart';
@@ -202,7 +201,7 @@ class _HomePage2State extends State<HomePage2> {
                       height: 80.0,
                       point: LatLng(_currentLocation!.latitude!, _currentLocation!.longitude!),
                       child: _isRouteActive
-                          ? Image.asset('assets/images/bus_icon.png', width: 60, height: 60)
+                          ? Image.asset('assets/images/bus-station.png', width: 60, height: 60)
                           : const Icon(
                               Icons.location_on,
                               color: Colors.red,
@@ -372,40 +371,6 @@ class _HomePage2State extends State<HomePage2> {
                           ),
                         ),
                       ),
-                      if (!_isRouteActive) ...[
-                        const SizedBox(height: 16),
-                        SizedBox(
-                          width: double.infinity,
-                          height: 56,
-                          child: OutlinedButton(
-                            onPressed: () {
-                              Navigator.push(
-                                context,
-                                MaterialPageRoute(
-                                  builder: (context) => TripsRoute(
-                                    departure: _departureController.text,
-                                    arrival: _arrivalController.text,
-                                  ),
-                                ),
-                              );
-                            },
-                            style: OutlinedButton.styleFrom(
-                              side: BorderSide(color: const Color(0xFF2A52C9)),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(16),
-                              ),
-                            ),
-                            child: Text(
-                              'View Route Details',
-                              style: TextStyle(
-                                color: const Color(0xFF2A52C9),
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
                     ],
                   ),
                 ),

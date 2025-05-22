@@ -62,15 +62,38 @@ class _ProfilePageState extends State<ProfilePage> {
     try {
       final user = _supabase.auth.currentUser;
       if (user != null) {
+        print('Attempting to load driver profile for user ID: ${user.id}');
+        
         // Get driver information from the drivers table
         final driverData = await _supabase
             .from('drivers')
             .select('*')
             .eq('id', user.id)
-            .single();
+            .maybeSingle();
+        
+        if (driverData == null) {
+          // If no driver record exists, show a message and return
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No driver profile found. Please complete registration first.'),
+                backgroundColor: Colors.orange,
+              ),
+            );
+          }
+          return;
+        }
             
         _originalDriverData = Map<String, dynamic>.from(driverData);
+        print('Successfully loaded driver data: $driverData');
 
+        // Get bus name from buses table
+        final busData = await _supabase
+            .from('buses')
+            .select('bus_name')
+            .eq('id', driverData['bus_id'])
+            .maybeSingle();
+            
         // Get user data for phone number from the user_profiles table
         final userData = await _supabase
             .from('user_profiles')
@@ -88,7 +111,7 @@ class _ProfilePageState extends State<ProfilePage> {
           _email = driverData['email_driver'] ?? user.email ?? 'No email';
           _phone = userData != null ? userData['phone'] ?? 'No phone number' : 'No phone number';
           _vehicleRegistrationPlate = driverData['vehicle_registration_plate'] ?? 'No plate number';
-          _busName = driverData['bus_name'] ?? 'No bus name';
+          _busName = busData?['bus_name'] ?? 'No bus name';
           
           // Set controller values
           _firstNameController.text = _firstName;
